@@ -652,50 +652,64 @@ document.addEventListener('unmerge-cell', (e) => {
 		const rowspan = (node.attrs.rowspan as number) || 1;
 		if (colspan <= 1 && rowspan <= 1) return;
 
-		const { table_cell, table_row } = state.schema.nodes;
+		const { table_cell } = state.schema.nodes;
 		const tr = state.tr;
 
-		// Find the row containing this cell
-		let rowPos = -1;
-		let rowNode: typeof state.doc | null = null;
-		let cellIndexInRow = -1;
+		// Find table and row positions
+		const rowPositions: number[] = [];
+		let targetRowIndex = -1;
 
 		state.doc.descendants((n, p) => {
-			if (n.type.name === 'table_row') {
-				n.forEach((cell, offset, index) => {
-					if (p + 1 + offset === pos) {
-						rowPos = p;
-						rowNode = n as unknown as typeof state.doc;
-						cellIndexInRow = index;
-					}
-				});
+			if (n.type.name === 'table') {
+				if (p < pos && pos < p + n.nodeSize) {
+					n.forEach((row, rowOffset) => {
+						if (row.type.name === 'table_row') {
+							rowPositions.push(p + 1 + rowOffset);
+						}
+					});
+				}
 			}
 		});
 
-		if (rowPos === -1 || !rowNode) return;
+		for (let i = 0; i < rowPositions.length; i++) {
+			const rPos = rowPositions[i];
+			const rNode = state.doc.nodeAt(rPos);
+			if (!rNode) continue;
+			rNode.forEach((_cell, offset) => {
+				if (rPos + 1 + offset === pos) targetRowIndex = i;
+			});
+		}
 
-		// Replace the merged cell with colspan=1 rowspan=1
+		// Handle rowspan: insert empty cells in subsequent rows (bottom to top)
+		if (rowspan > 1 && targetRowIndex >= 0) {
+			for (let i = targetRowIndex + rowspan - 1; i > targetRowIndex; i--) {
+				if (i >= rowPositions.length) continue;
+				const rPos = rowPositions[i];
+				const emptyCell = table_cell.create({
+					colspan: 1,
+					rowspan: 1,
+					alignment: null,
+				});
+				tr.insert(rPos + 1, emptyCell);
+			}
+		}
+
+		// Handle colspan: replace merged cell with multiple cells
+		const mappedPos = tr.mapping.map(pos);
 		const emptyCell = table_cell.create(
 			{ colspan: 1, rowspan: 1, alignment: node.attrs.alignment },
 			node.content,
 		);
-
-		// Build extra empty cells for colspan
 		const extraCells = [];
 		for (let i = 1; i < colspan; i++) {
 			extraCells.push(
 				table_cell.create({ colspan: 1, rowspan: 1, alignment: null }),
 			);
 		}
-
-		// Replace the cell and insert extra cells after it
-		tr.replaceWith(pos, pos + node.nodeSize, [...extraCells, emptyCell]);
-
-		// For rowspan: insert cells in subsequent rows
-		if (rowspan > 1) {
-			// Find subsequent rows and insert cells at the right position
-			// This is complex; for now just reset rowspan
-		}
+		tr.replaceWith(mappedPos, mappedPos + node.nodeSize, [
+			...extraCells,
+			emptyCell,
+		]);
 
 		view.dispatch(tr);
 	});
