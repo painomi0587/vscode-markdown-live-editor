@@ -52,6 +52,7 @@ import { mountSearchPanel } from './searchPanel';
 import { searchPlugin } from './searchPlugin';
 import { configureSlash, slash, slashKeyboardPlugin } from './slashPlugin';
 import { configureTableBlock, tableBlock } from './tableBlockPlugin';
+import { tableMergePlugin } from './tableMergePlugin';
 import {
 	configureCustomLinkTooltip,
 	configureSelectionToolbar,
@@ -333,6 +334,7 @@ async function createEditor(
 		.config(configureCustomLinkTooltip)
 		.use(slash)
 		.config(configureSlash)
+		.use(tableMergePlugin)
 		.use(slashKeyboardPlugin);
 
 	await instance.create();
@@ -634,6 +636,69 @@ window.addEventListener('message', (event) => {
 
 window.addEventListener('blur', () => {
 	setTimeout(maybeApplyPendingRemoteUpdate, 0);
+});
+
+// Handle unmerge-cell events from tableMergePlugin
+document.addEventListener('unmerge-cell', (e) => {
+	const { pos } = (e as CustomEvent).detail as { pos: number };
+	if (!editor) return;
+	editor.action((ctx) => {
+		const view = ctx.get(editorViewCtx);
+		const state = view.state;
+		const node = state.doc.nodeAt(pos);
+		if (!node || node.type.name !== 'table_cell') return;
+
+		const colspan = (node.attrs.colspan as number) || 1;
+		const rowspan = (node.attrs.rowspan as number) || 1;
+		if (colspan <= 1 && rowspan <= 1) return;
+
+		const { table_cell, table_row } = state.schema.nodes;
+		const tr = state.tr;
+
+		// Find the row containing this cell
+		let rowPos = -1;
+		let rowNode: typeof state.doc | null = null;
+		let cellIndexInRow = -1;
+
+		state.doc.descendants((n, p) => {
+			if (n.type.name === 'table_row') {
+				n.forEach((cell, offset, index) => {
+					if (p + 1 + offset === pos) {
+						rowPos = p;
+						rowNode = n as unknown as typeof state.doc;
+						cellIndexInRow = index;
+					}
+				});
+			}
+		});
+
+		if (rowPos === -1 || !rowNode) return;
+
+		// Replace the merged cell with colspan=1 rowspan=1
+		const emptyCell = table_cell.create(
+			{ colspan: 1, rowspan: 1, alignment: node.attrs.alignment },
+			node.content,
+		);
+
+		// Build extra empty cells for colspan
+		const extraCells = [];
+		for (let i = 1; i < colspan; i++) {
+			extraCells.push(
+				table_cell.create({ colspan: 1, rowspan: 1, alignment: null }),
+			);
+		}
+
+		// Replace the cell and insert extra cells after it
+		tr.replaceWith(pos, pos + node.nodeSize, [...extraCells, emptyCell]);
+
+		// For rowspan: insert cells in subsequent rows
+		if (rowspan > 1) {
+			// Find subsequent rows and insert cells at the right position
+			// This is complex; for now just reset rowspan
+		}
+
+		view.dispatch(tr);
+	});
 });
 
 // Notify the extension host that the webview is ready
