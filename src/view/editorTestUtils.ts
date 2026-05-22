@@ -19,6 +19,18 @@ export function cleanupTableBr(md: string): string {
 		.join('\n');
 }
 
+// Unescape \^ and \> in table cells (extended table syntax)
+export function cleanupTableEscapes(md: string): string {
+	return md
+		.split('\n')
+		.map((line) =>
+			line.startsWith('|')
+				? line.replaceAll('\\^', '^').replaceAll('\\>', '>')
+				: line,
+		)
+		.join('\n');
+}
+
 export function countText(text: string): WordCountData {
 	const characters = text.length;
 	const words = text.split(/\s+/).filter((w) => w.length > 0).length;

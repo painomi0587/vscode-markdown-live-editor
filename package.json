@@ -162,8 +162,11 @@
 		"highlight.js": "^11.11.1",
 		"katex": "^0.16.46",
 		"mermaid": "^11.15.0",
+		"rehype-stringify": "^10.0.1",
 		"remark-emoji": "^5.0.2",
+		"remark-extended-table": "^2.0.3",
 		"remark-frontmatter": "^5.0.0",
-		"remark-math": "^6.0.0"
+		"remark-math": "^6.0.0",
+		"remark-rehype": "^11.1.2"
 	}
 }
