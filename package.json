@@ -1,18 +1,16 @@
 {
-	"name": "markdown-live-editor",
-	"displayName": "Markdown Live Editor",
-	"description": "WYSIWYG Markdown editor for VS Code",
-	"version": "0.6.2",
-	"publisher": "jishii1204",
-	"icon": "icon.png",
-	"license": "MIT",
+	"name": "markdown-live-editor-plus",
+	"displayName": "Markdown Live Editor Plus",
+	"description": "WYSIWYG Markdown editor for VS Code with extended table support (colspan/rowspan)",
+	"version": "0.1.0",
+	"publisher": "painomi0587",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/jishii1204/vscode-markdown-live"
+		"url": "https://github.com/painomi0587/vscode-markdown-live-editor"
 	},
-	"homepage": "https://github.com/jishii1204/vscode-markdown-live#readme",
+	"homepage": "https://github.com/painomi0587/vscode-markdown-live-editor#readme",
 	"bugs": {
-		"url": "https://github.com/jishii1204/vscode-markdown-live/issues"
+		"url": "https://github.com/painomi0587/vscode-markdown-live-editor/issues"
 	},
 	"engines": {
 		"vscode": "^1.75.0"
