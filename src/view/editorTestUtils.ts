@@ -14,7 +14,7 @@ export function cleanupTableBr(md: string): string {
 	// Detect the newline style and preserve it
 	const newlineMatch = md.match(/\r\n|\n|\r/);
 	const newline = newlineMatch ? newlineMatch[0] : '\n';
-	
+
 	return md
 		.split(/\r\n|\n|\r/)
 		.map((line) =>
@@ -28,7 +28,7 @@ export function cleanupTableEscapes(md: string): string {
 	// Detect the newline style and preserve it
 	const newlineMatch = md.match(/\r\n|\n|\r/);
 	const newline = newlineMatch ? newlineMatch[0] : '\n';
-	
+
 	return md
 		.split(/\r\n|\n|\r/)
 		.map((line) =>
