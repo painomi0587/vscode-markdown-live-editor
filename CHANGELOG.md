@@ -2,6 +2,12 @@
 
 All notable changes to Markdown Live Editor will be documented in this file.
 
+## [0.1.1] - 2026-05-29
+
+### Fixed
+
+- Fixed Extended table syntax (colspan/rowspan) not working with LF line endings — now properly supports LF, CRLF, and CR line endings
+
 ## [0.6.2] - 2026-04-20
 
 ### Added
