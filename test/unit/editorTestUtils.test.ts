@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
 	cleanupTableBr,
+	cleanupTableEscapes,
 	countLogicalTextLines,
 	countParagraphRowsFromHardBreaks,
 	countText,
@@ -17,6 +18,22 @@ describe('cleanupTableBr', () => {
 
 		const actual = cleanupTableBr(input);
 		assert.equal(actual, ['| col1 | col2 |', '| --- | --- |', '| ab | c |', 'paragraph<br />keep'].join('\n'));
+	});
+
+	it('preserves indentation when cleaning table rows', () => {
+		const input = ['  | col1 | col2 |', '  | --- | --- |', '  | a<br />b | c |'].join('\n');
+
+		const actual = cleanupTableBr(input);
+		assert.equal(actual, ['  | col1 | col2 |', '  | --- | --- |', '  | ab | c |'].join('\n'));
+	});
+});
+
+describe('cleanupTableEscapes', () => {
+	it('unescapes table markers only in table rows', () => {
+		const input = ['| col1 | col2 |', '| --- | --- |', '| \> | \^ |', 'paragraph \> \^'].join('\n');
+
+		const actual = cleanupTableEscapes(input);
+		assert.equal(actual, ['| col1 | col2 |', '| --- | --- |', '| > | ^ |', 'paragraph \> \^'].join('\n'));
 	});
 });
 

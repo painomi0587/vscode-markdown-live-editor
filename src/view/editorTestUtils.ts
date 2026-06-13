@@ -10,33 +10,33 @@ export interface WordCountData {
 }
 
 // Strip spurious <br /> that can appear in serialized markdown table rows.
-export function cleanupTableBr(md: string): string {
-	// Detect the newline style and preserve it
+function cleanupTableLines(
+	md: string,
+	transform: (line: string) => string,
+): string {
 	const newlineMatch = md.match(/\r\n|\n|\r/);
 	const newline = newlineMatch ? newlineMatch[0] : '\n';
 
 	return md
 		.split(/\r\n|\n|\r/)
-		.map((line) =>
-			line.startsWith('|') ? line.replaceAll('<br />', '') : line,
-		)
+		.map((line) => {
+			const match = line.match(/^(\s*)\|/);
+			if (!match) return line;
+			const prefix = match[1];
+			return prefix + transform(line.slice(prefix.length));
+		})
 		.join(newline);
+}
+
+export function cleanupTableBr(md: string): string {
+	return cleanupTableLines(md, (line) => line.replaceAll('<br />', ''));
 }
 
 // Unescape \^ and \> in table cells (extended table syntax)
 export function cleanupTableEscapes(md: string): string {
-	// Detect the newline style and preserve it
-	const newlineMatch = md.match(/\r\n|\n|\r/);
-	const newline = newlineMatch ? newlineMatch[0] : '\n';
-
-	return md
-		.split(/\r\n|\n|\r/)
-		.map((line) =>
-			line.startsWith('|')
-				? line.replaceAll('\\^', '^').replaceAll('\\>', '>')
-				: line,
-		)
-		.join(newline);
+	return cleanupTableLines(md, (line) =>
+		line.replaceAll('\\^', '^').replaceAll('\\>', '>'),
+	);
 }
 
 export function countText(text: string): WordCountData {

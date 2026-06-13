@@ -24,7 +24,6 @@ import { autoPairPlugin } from './autoPairPlugin';
 import { codeBlockPlugin, highlightPlugin } from './codeBlockPlugin';
 import {
 	cleanupTableBr,
-	cleanupTableEscapes,
 	countText,
 	type HeadingData,
 	headingsEqual,
@@ -156,9 +155,7 @@ const syncPlugin = $prose((ctx) => {
 					updateTimer = setTimeout(() => {
 						updateTimer = null;
 						const serializer = ctx.get(serializerCtx);
-						const md = cleanupTableEscapes(
-							cleanupTableBr(serializer(view.state.doc)),
-						);
+						const md = cleanupTableBr(serializer(view.state.doc));
 						if (md === normalizedBaseline) return;
 						syncDebug('post-update', {
 							length: md.length,
@@ -342,10 +339,20 @@ async function createEditor(
 	// Capture the normalized baseline after editor is fully initialized
 	instance.action((ctx) => {
 		const serializer = ctx.get(serializerCtx);
-		normalizedBaseline = cleanupTableEscapes(
-			cleanupTableBr(serializer(ctx.get(editorStateCtx).doc)),
+		normalizedBaseline = cleanupTableBr(
+			serializer(ctx.get(editorStateCtx).doc),
 		);
 	});
+
+	// If a remote update arrived while the editor was still initializing,
+	// keep it and apply it once the editor is ready.
+	if (pendingRemoteMarkdown) {
+		const pending = pendingRemoteMarkdown;
+		pendingRemoteMarkdown = null;
+		if (pending !== markdown) {
+			replaceContent(pending);
+		}
+	}
 	if (disposeSearchUi) {
 		disposeSearchUi();
 		disposeSearchUi = null;
@@ -364,8 +371,71 @@ async function createEditor(
 	return instance;
 }
 
+function buildTableLayout(table: ProseMirrorNode, tableStart: number) {
+	type CellInfo = {
+		node: ProseMirrorNode;
+		pos: number;
+		startColumn: number;
+		colspan: number;
+		rowspan: number;
+	};
+
+	const rows: Array<{
+		row: ProseMirrorNode;
+		rowPos: number;
+		cells: CellInfo[];
+	}> = [];
+	const rowSpanCounts: number[] = [];
+
+	table.forEach((row, rowOffset) => {
+		if (row.type.name !== 'table_row') return;
+		const rowPos = tableStart + 1 + rowOffset;
+		const cells: CellInfo[] = [];
+		let col = 0;
+
+		row.forEach((cell, cellOffset) => {
+			while (rowSpanCounts[col] > 0) {
+				col += 1;
+			}
+			const startColumn = col;
+			const colspan = (cell.attrs.colspan as number) || 1;
+			const rowspan = (cell.attrs.rowspan as number) || 1;
+			cells.push({
+				node: cell,
+				pos: rowPos + 1 + cellOffset,
+				startColumn,
+				colspan,
+				rowspan,
+			});
+
+			for (let i = 0; i < colspan; i++) {
+				const index = startColumn + i;
+				if (rowspan > 1) {
+					rowSpanCounts[index] = Math.max(
+						rowSpanCounts[index] || 0,
+						rowspan - 1,
+					);
+				} else if (rowSpanCounts[index] === undefined) {
+					rowSpanCounts[index] = 0;
+				}
+			}
+			col += colspan;
+		});
+
+		rows.push({ row, rowPos, cells });
+		for (let i = 0; i < rowSpanCounts.length; i++) {
+			if (rowSpanCounts[i] > 0) {
+				rowSpanCounts[i] -= 1;
+			}
+		}
+	});
+
+	return rows;
+}
+
 function replaceContent(newMarkdown: string): void {
 	if (!editor) {
+		pendingRemoteMarkdown = newMarkdown;
 		return;
 	}
 	isUpdatingFromExtension = true;
@@ -373,24 +443,24 @@ function replaceContent(newMarkdown: string): void {
 		editor.action((ctx) => {
 			const view = ctx.get(editorViewCtx);
 			const serializer = ctx.get(serializerCtx);
-			const currentMarkdown = cleanupTableEscapes(
-				cleanupTableBr(serializer(ctx.get(editorStateCtx).doc)),
+			const currentMarkdown = cleanupTableBr(
+				serializer(ctx.get(editorStateCtx).doc),
 			);
-
-			if (currentMarkdown === newMarkdown) {
-				syncDebug('replace-skip-equal', {
-					incomingLength: newMarkdown.length,
-					incomingHash: hashText(newMarkdown),
+			const normalizedIncomingMarkdown = cleanupTableBr(newMarkdown);
+			if (normalizedIncomingMarkdown === currentMarkdown) {
+				syncDebug('replace-skip-noop', {
+					incomingLength: normalizedIncomingMarkdown.length,
+					incomingHash: hashText(normalizedIncomingMarkdown),
 				});
 				isUpdatingFromExtension = false;
 				return;
 			}
 
 			const parser = ctx.get(parserCtx);
-			const newDoc = parser(newMarkdown);
+			const newDoc = parser(normalizedIncomingMarkdown);
 			syncDebug('replace-apply', {
-				incomingLength: newMarkdown.length,
-				incomingHash: hashText(newMarkdown),
+				incomingLength: normalizedIncomingMarkdown.length,
+				incomingHash: hashText(normalizedIncomingMarkdown),
 				currentLength: currentMarkdown.length,
 				currentHash: hashText(currentMarkdown),
 				focus: view.hasFocus(),
@@ -403,9 +473,7 @@ function replaceContent(newMarkdown: string): void {
 
 			// Update baseline to the new normalized content
 			const updatedDoc = ctx.get(editorStateCtx).doc;
-			normalizedBaseline = cleanupTableEscapes(
-				cleanupTableBr(serializer(updatedDoc)),
-			);
+			normalizedBaseline = cleanupTableBr(serializer(updatedDoc));
 			isUpdatingFromExtension = false;
 			sendHeadings(updatedDoc);
 			sendWordCount(updatedDoc);
@@ -655,46 +723,78 @@ document.addEventListener('unmerge-cell', (e) => {
 		const { table_cell } = state.schema.nodes;
 		const tr = state.tr;
 
-		// Find table and row positions
-		const rowPositions: number[] = [];
-		let targetRowIndex = -1;
-
+		let targetTableNode: ProseMirrorNode | null = null;
+		let targetTablePos = -1;
 		state.doc.descendants((n, p) => {
-			if (n.type.name === 'table') {
-				if (p < pos && pos < p + n.nodeSize) {
-					n.forEach((row, rowOffset) => {
-						if (row.type.name === 'table_row') {
-							rowPositions.push(p + 1 + rowOffset);
-						}
-					});
-				}
+			if (n.type.name !== 'table') return;
+			if (p < pos && pos < p + n.nodeSize) {
+				targetTableNode = n;
+				targetTablePos = p;
 			}
 		});
+		if (!targetTableNode) return;
 
-		for (let i = 0; i < rowPositions.length; i++) {
-			const rPos = rowPositions[i];
-			const rNode = state.doc.nodeAt(rPos);
-			if (!rNode) continue;
-			rNode.forEach((_cell, offset) => {
-				if (rPos + 1 + offset === pos) targetRowIndex = i;
-			});
+		const rows = buildTableLayout(targetTableNode, targetTablePos);
+		let targetRowIndex = -1;
+		let targetCellInfo: {
+			node: ProseMirrorNode;
+			pos: number;
+			startColumn: number;
+			colspan: number;
+			rowspan: number;
+		} | null = null;
+
+		for (let i = 0; i < rows.length; i++) {
+			const rowInfo = rows[i];
+			for (const cellInfo of rowInfo.cells) {
+				if (cellInfo.pos === pos) {
+					targetRowIndex = i;
+					targetCellInfo = cellInfo;
+					break;
+				}
+			}
+			if (targetCellInfo) break;
 		}
+		if (!targetCellInfo) return;
 
-		// Handle rowspan: insert empty cells in subsequent rows (bottom to top)
-		if (rowspan > 1 && targetRowIndex >= 0) {
-			for (let i = targetRowIndex + rowspan - 1; i > targetRowIndex; i--) {
-				if (i >= rowPositions.length) continue;
-				const rPos = rowPositions[i];
-				const emptyCell = table_cell.create({
-					colspan: 1,
-					rowspan: 1,
-					alignment: null,
-				});
-				tr.insert(rPos + 1, emptyCell);
+		if (rowspan > 1) {
+			for (let i = targetRowIndex + 1; i < targetRowIndex + rowspan; i++) {
+				if (i >= rows.length) continue;
+				const rowInfo = rows[i];
+				let computedPos = rowInfo.rowPos + rowInfo.row.nodeSize - 1;
+
+				const targetColumn = targetCellInfo.startColumn;
+				const beforeCell = rowInfo.cells.find(
+					(cell) => cell.startColumn >= targetColumn,
+				);
+				const previousCell = [...rowInfo.cells]
+					.filter((cell) => cell.startColumn < targetColumn)
+					.pop();
+
+				if (beforeCell) {
+					computedPos = beforeCell.pos;
+				} else if (
+					previousCell &&
+					previousCell.startColumn + previousCell.colspan > targetColumn
+				) {
+					computedPos = previousCell.pos + previousCell.node.nodeSize;
+				}
+
+				// Map through preceding insertions so position stays correct
+				// when multiple rows need placeholder cells (rowspan > 2).
+				const insertPos = tr.mapping.map(computedPos);
+
+				for (let j = colspan - 1; j >= 0; j--) {
+					const placeholderCell = table_cell.create({
+						colspan: 1,
+						rowspan: 1,
+						alignment: null,
+					});
+					tr.insert(insertPos, placeholderCell);
+				}
 			}
 		}
 
-		// Handle colspan: replace merged cell with multiple cells
 		const mappedPos = tr.mapping.map(pos);
 		const emptyCell = table_cell.create(
 			{ colspan: 1, rowspan: 1, alignment: node.attrs.alignment },
@@ -707,13 +807,12 @@ document.addEventListener('unmerge-cell', (e) => {
 			);
 		}
 		tr.replaceWith(mappedPos, mappedPos + node.nodeSize, [
-			...extraCells,
 			emptyCell,
+			...extraCells,
 		]);
 
 		view.dispatch(tr);
 	});
 });
 
-// Notify the extension host that the webview is ready
 vscode.postMessage({ type: 'ready' });
