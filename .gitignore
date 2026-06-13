@@ -7,3 +7,14 @@ out/
 .DS_Store
 
 .test-dist/
+
+# --- ADDF Framework (do not remove) ---
+.claude/commands/*.exp.md
+.claude/.turn-count
+.claude/.context-reminder-state
+.claude/logs/
+CLAUDE.local.md
+CLAUDE.repo.md
+.claude/Dashboard.md
+.claude/skills/addf-gui-test.md
+# --- /ADDF Framework ---
