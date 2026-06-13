@@ -16,3 +16,17 @@ test/**
 **/*.map
 **/*.ts
 **/.vscode-test.*
+.test-dist/**
+.venv/**
+.claudeignore
+docs/**
+TODO.md
+CLAUDE.md
+CLAUDE.local.md
+CLAUDE.local.example.md
+CLAUDE.repo.md
+CLAUDE.repo.example.md
+AGENTS.md
+temp-test.ts
+tmp-remark-debug.js
+trace.txt
