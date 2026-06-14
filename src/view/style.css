@@ -589,6 +589,7 @@ body {
 	border-color: rgba(128, 128, 128, 0.35);
 }
 
+.ProseMirror tr[data-is-header] th,
 .ProseMirror tr[data-extra-header] th {
 	border-color: rgba(128, 128, 128, 0.69);
 	background-color: rgba(128, 128, 128, 0.08);
