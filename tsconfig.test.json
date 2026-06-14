@@ -15,6 +15,7 @@
 	"include": [
 		"src/view/editorTestUtils.ts",
 		"src/view/extendedTableMatchers.ts",
+		"src/view/multiRowHeaderPlugin.ts",
 		"test/unit/**/*.ts",
 		"test/smoke/**/*.ts"
 	]

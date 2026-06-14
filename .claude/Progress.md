@@ -74,21 +74,27 @@
 
 ## タスク
 
-### 現在のタスク: Plan 0001 — Extended Table Bug Fixes
+### 現在のタスク: Plan 0002 — Multi-Row Table Header
 
 #### サブタスクチェックリスト
 
-- [x] tsconfig.test.json を CommonJS/Node に修正
-- [x] extendedTablePlugin.ts → extendedTableMatchers.ts に match 述語を分離・再エクスポート
-- [x] extendedTablePlugin.test.ts を書き換え（Milkdown 不要の純粋テスト）
-- [x] view.ts: colspan unmerge セル順序修正 (`[emptyCell, ...extraCells]`)
-- [x] view.ts: rowspan unmerge position drift 修正 (`tr.mapping.map()`)
-- [x] lint & test:unit → 全 43 テスト PASS
+- [x] `src/view/multiRowHeaderPlugin.ts` 新規作成（remarkMultiRowHeader プラグイン）
+- [x] `src/view/extendedTableMatchers.ts` 更新（isTableHeaderMarkdownNode / isTableHeaderProseNode 追加、isTableCellMarkdownNode を header 除外に修正）
+- [x] `src/view/extendedTablePlugin.ts` 更新（extendedTableHeaderSchema / extraHeaderRowSchema / multiRowTableSchema / extendedTableRowSchema / extendedTableHeaderRowSchema / multiRowHeaderPlugin 追加）
+- [x] `src/view/tableMergePlugin.ts` 更新（table_header セルも merge 対象に）
+- [x] `src/view/view.ts` 更新（新スキーマ登録、unmerge ハンドラを table_header 対応に）
+- [x] processColspan バグ修正（`>` は右のセルではなく左のセルに colspan を付与）
+- [x] `test/unit/multiRowHeaderPlugin.test.ts` 新規作成（12テスト PASS）
+- [x] `tsconfig.test.json` に multiRowHeaderPlugin.ts を追加
+- [x] lint (biome) PASS / 型チェック (tsc --noEmit) PASS
+- [x] test:unit 55/55 PASS / esbuild bundle PASS
+- [ ] CSS: `tr[data-extra-header]` をヘッダー行として見た目に反映（Phase E）
+- [ ] UI: ヘッダー行の追加・削除ボタン（Phase E）
 
 #### 日記
 
-##### 2026-06-14 — Plan 0001 開始、バグ調査完了
-**やったこと**: テスト全失敗を確認。根本原因特定: tsconfig.test.json の moduleResolution:bundler が Node v22 ESM と非互換。さらに colspan unmerge の順序バグと rowspan position drift を発見。extendedTablePlugin.test.ts は Milkdown のスキーマ初期化前に plugin.schema にアクセスしているため設計上動かない。
-**今の見立て**: 4つのバグはすべて独立して修正可能。実装難度は低〜中。
-**次の自分へ**: tsconfig → extendedTablePlugin → view.ts の順に修正する。lint が通ることを各ステップで確認。
-**気になっていること**: `cleanupTableEscapes` が view.ts でインポートされているが未使用。biome lint が通っているなら unused import が許容されているか、または使われている箇所を見落としている可能性あり。実装後に確認。
+##### 2026-06-14 — Plan 0002 コア実装完了、テスト PASS
+**やったこと**: コンテキスト引き継ぎ後、lint (CRLF→LF / テンプレートリテラル / import順序) を修正して PASS。multiRowHeaderPlugin.test.ts を新規作成したが `processColspan` のセマンティクスバグを発見: `>` が左ではなく右のセルに colspan を付与していた。remark-extended-table と一致する「左延長」に修正し、ラウンドトリップ安定を確認。全 55 テスト PASS、型チェック・lint・ビルドも全 PASS。
+**今の見立て**: Phase A〜D（remark プラグイン・スキーマ・view 登録・unmerge 対応）は完了。残りは Phase E（CSS + UI ボタン）のみ。ユーザー承認待ちで一旦コミットして問題ない状態。
+**次の自分へ**: Phase E: `media/styles.css`（または webview 用の CSS ファイル）で `tr[data-extra-header] th` をヘッダーとして装飾する。ボタンは tableBlockPlugin や tableMergePlugin の既存パターンを参考に実装する。
+**気になっていること**: extra_header_row の `toMarkdown.runner` で `openNode` を `as unknown as` でキャストしている。型安全ではないが SerializerState の公開 API が限られているため止む無し。

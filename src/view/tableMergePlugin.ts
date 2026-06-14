@@ -13,7 +13,11 @@ export const tableMergePlugin = $prose(() => {
 				const decorations: Decoration[] = [];
 
 				state.doc.descendants((node, pos) => {
-					if (node.type.name !== 'table_cell') return;
+					const isMergeableCell =
+						node.type.name === 'table_cell' ||
+						node.type.name === 'table_header';
+					if (!isMergeableCell) return;
+
 					const colspan = (node.attrs.colspan as number) || 1;
 					const rowspan = (node.attrs.rowspan as number) || 1;
 					if (colspan <= 1 && rowspan <= 1) return;
@@ -30,7 +34,6 @@ export const tableMergePlugin = $prose(() => {
 							btn.textContent = '⊠';
 							btn.addEventListener('mousedown', (e) => {
 								e.preventDefault();
-								// dispatch handled via data attribute
 								btn.dispatchEvent(
 									new CustomEvent('unmerge-cell', {
 										bubbles: true,

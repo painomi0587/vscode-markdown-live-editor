@@ -32,7 +32,13 @@ import {
 import { emojiPlugin } from './emojiPlugin';
 import {
 	extendedTableCellSchema,
+	extendedTableHeaderRowSchema,
+	extendedTableHeaderSchema,
 	extendedTablePlugin,
+	extendedTableRowSchema,
+	extraHeaderRowSchema,
+	multiRowHeaderPlugin,
+	multiRowTableSchema,
 } from './extendedTablePlugin';
 import {
 	frontmatterSchema,
@@ -303,7 +309,13 @@ async function createEditor(
 		.use(commonmark)
 		.use(gfm)
 		.use(extendedTableCellSchema)
+		.use(extendedTableHeaderSchema)
+		.use(extraHeaderRowSchema)
+		.use(multiRowTableSchema)
+		.use(extendedTableRowSchema)
+		.use(extendedTableHeaderRowSchema)
 		.use(extendedTablePlugin)
+		.use(multiRowHeaderPlugin)
 		.use(tableBlock)
 		.config(configureTableBlock)
 		.use(remarkFrontmatterPlugin)
@@ -714,13 +726,16 @@ document.addEventListener('unmerge-cell', (e) => {
 		const view = ctx.get(editorViewCtx);
 		const state = view.state;
 		const node = state.doc.nodeAt(pos);
-		if (!node || node.type.name !== 'table_cell') return;
+		const isHeaderCell = node?.type.name === 'table_header';
+		if (!node || (node.type.name !== 'table_cell' && !isHeaderCell)) return;
 
 		const colspan = (node.attrs.colspan as number) || 1;
 		const rowspan = (node.attrs.rowspan as number) || 1;
 		if (colspan <= 1 && rowspan <= 1) return;
 
-		const { table_cell } = state.schema.nodes;
+		const { table_cell, table_header } = state.schema.nodes;
+		// Use the same cell type as the target cell when creating placeholders/splits.
+		const cellType = isHeaderCell ? table_header : table_cell;
 		const tr = state.tr;
 
 		let targetTableNode: ProseMirrorNode | null = null;
@@ -785,7 +800,7 @@ document.addEventListener('unmerge-cell', (e) => {
 				const insertPos = tr.mapping.map(computedPos);
 
 				for (let j = colspan - 1; j >= 0; j--) {
-					const placeholderCell = table_cell.create({
+					const placeholderCell = cellType.create({
 						colspan: 1,
 						rowspan: 1,
 						alignment: null,
@@ -796,14 +811,14 @@ document.addEventListener('unmerge-cell', (e) => {
 		}
 
 		const mappedPos = tr.mapping.map(pos);
-		const emptyCell = table_cell.create(
+		const emptyCell = cellType.create(
 			{ colspan: 1, rowspan: 1, alignment: node.attrs.alignment },
 			node.content,
 		);
 		const extraCells = [];
 		for (let i = 1; i < colspan; i++) {
 			extraCells.push(
-				table_cell.create({ colspan: 1, rowspan: 1, alignment: null }),
+				cellType.create({ colspan: 1, rowspan: 1, alignment: null }),
 			);
 		}
 		tr.replaceWith(mappedPos, mappedPos + node.nodeSize, [
