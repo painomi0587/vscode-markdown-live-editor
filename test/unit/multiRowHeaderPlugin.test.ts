@@ -170,101 +170,63 @@ describe('remarkMultiRowHeader — parse direction', () => {
 });
 
 // -------------------------------------------------------------------
-// Serialize direction tests
+// Serialize direction (via preTableRow node — handled by Milkdown runner,
+// not the remark plugin itself). The plugin now only handles parse direction.
+// These tests verify the parse still works when the file was written in the
+// new format: pipe rows immediately before the table with no blank line.
 // -------------------------------------------------------------------
 
-describe('remarkMultiRowHeader — serialize direction', () => {
-	it('does nothing when no table has extra header rows', () => {
+describe('remarkMultiRowHeader — serialize format (parse of new output)', () => {
+	it('leaves tables with isExtraHeader rows unchanged (serialize is handled in Milkdown runner)', () => {
+		// The remark plugin no longer strips isExtraHeader rows; Milkdown's
+		// toMarkdown runner does that before remark.stringify() is called.
+		const extraRow = tableRow([tableCell('X'), tableCell('Y')], { isExtraHeader: true });
 		const headerRow = tableRow([tableCell('A'), tableCell('B')], { isHeader: true });
-		const t = table([headerRow]);
+		const t = table([extraRow, headerRow]);
 		const tree = root(t);
+
+		runPlugin(tree);
+
+		// Plugin is parse-only now; it should not transform this tree.
+		assert.equal(tree.children.length, 1, 'table unchanged — serialize is Milkdown runner\'s job');
+		assert.equal(asChildren(tree.children[0]).length, 2, 'both rows still present');
+	});
+
+	it('round-trip: parse the new serialized format (pipe rows, no blank line before table)', () => {
+		// The Milkdown runner serializes extra header rows as:
+		//   | A | > | B |
+		//   | 1 | 2 | 3 |   ← standard GFM table (header + sep + body)
+		//   | - | - | - |
+		// remark-gfm parses this as paragraph("| A | > | B |") + table.
+		// Our plugin then converts the paragraph back to an extra_header_row.
+		const p = paragraph(text('| A | > | B |'));
+		const headerRow = tableRow([tableCell('H1'), tableCell('H2'), tableCell('H3')], { isHeader: true });
+		const t = table([headerRow]);
+		const tree = root(p, t);
 
 		runPlugin(tree);
 
 		assert.equal(tree.children.length, 1);
+		const extraCells = asChildren(asChildren(tree.children[0])[0]);
+		assert.equal(extraCells.length, 2);
+		assert.equal((extraCells[0] as AnyNode).colspan, 2);
+		assert.equal(asValue(asChildren(extraCells[0])[0]), 'A');
 	});
 
-	it('converts extra_header_row back to a paragraph before the table', () => {
-		const extraRow = tableRow(
-			[tableCell('X'), tableCell('Y')],
-			{ isExtraHeader: true },
-		);
-		const headerRow = tableRow([tableCell('A'), tableCell('B')], { isHeader: true });
-		const t = table([extraRow, headerRow]);
-		const tree = root(t);
-
-		runPlugin(tree);
-
-		assert.equal(tree.children.length, 2, 'paragraph + table');
-		const para = tree.children[0] as AnyNode;
-		assert.equal(para.type, 'paragraph');
-		assert.equal(asValue(asChildren(para)[0]), '| X | Y |');
-
-		const tblRows = asChildren(tree.children[1]);
-		assert.equal(tblRows.length, 1, 'only standard header row remains');
-		assert.equal((tblRows[0] as AnyNode).isExtraHeader, undefined);
-	});
-
-	it('encodes colspan using > markers AFTER the spanning cell', () => {
-		// A(colspan=2) serializes as "| A | > |" — `>` follows the spanning cell
-		const extraRow = tableRow(
-			[{ ...tableCell('A'), colspan: 2 } as AnyNode, tableCell('B')],
-			{ isExtraHeader: true },
-		);
-		const headerRow = tableRow(
-			[tableCell('H1'), tableCell('H2'), tableCell('H3')],
-			{ isHeader: true },
-		);
-		const t = table([extraRow, headerRow]);
-		const tree = root(t);
-
-		runPlugin(tree);
-
-		const para = tree.children[0] as AnyNode;
-		assert.equal(asValue(asChildren(para)[0]), '| A | > | B |');
-	});
-
-	it('serializes multiple extra header rows as newline-separated lines', () => {
-		const extra1 = tableRow([tableCell('R1A'), tableCell('R1B')], { isExtraHeader: true });
-		const extra2 = tableRow([tableCell('R2A'), tableCell('R2B')], { isExtraHeader: true });
+	it('round-trip: multi-line pipe paragraph (multiple extra header rows) before table', () => {
+		const p = paragraph(text('| R1A | R1B |\n| R2A | R2B |'));
 		const headerRow = tableRow([tableCell('H1'), tableCell('H2')], { isHeader: true });
-		const t = table([extra1, extra2, headerRow]);
-		const tree = root(t);
+		const t = table([headerRow]);
+		const tree = root(p, t);
 
 		runPlugin(tree);
 
-		const para = tree.children[0] as AnyNode;
-		assert.equal(asValue(asChildren(para)[0]), '| R1A | R1B |\n| R2A | R2B |');
-	});
-
-	it('round-trips: serialize then parse returns equivalent structure', () => {
-		// Start from ProseMirror serialize output: extra row with A(colspan=2), B
-		const extraRow = tableRow(
-			[{ ...tableCell('A'), colspan: 2 } as AnyNode, tableCell('B')],
-			{ isExtraHeader: true },
-		);
-		const headerRow = tableRow([tableCell('H1'), tableCell('H2'), tableCell('H3')], { isHeader: true });
-		const t = table([extraRow, headerRow]);
-		const tree = root(t);
-
-		// Serialize
-		runPlugin(tree);
-		assert.equal(tree.children.length, 2);
-		const paraText = asValue(asChildren(tree.children[0] as AnyNode)[0]);
-		assert.equal(paraText, '| A | > | B |');
-
-		// Parse — rebuild a fresh tree from the serialized form
-		const para2 = paragraph(text(paraText));
-		const header2 = tableRow([tableCell('H1'), tableCell('H2'), tableCell('H3')], { isHeader: true });
-		const t2 = table([header2]);
-		const tree2 = root(para2, t2);
-
-		runPlugin(tree2);
-
-		assert.equal(tree2.children.length, 1);
-		const extraCells2 = asChildren(asChildren(tree2.children[0])[0]);
-		assert.equal(extraCells2.length, 2);
-		assert.equal((extraCells2[0] as AnyNode).colspan, 2); // A recovered with colspan=2
-		assert.equal(asValue(asChildren(extraCells2[0])[0]), 'A');
+		assert.equal(tree.children.length, 1);
+		const rows = asChildren(tree.children[0]);
+		assert.equal(rows.length, 3); // 2 extra + 1 standard
+		assert.equal((rows[0] as AnyNode).isExtraHeader, true);
+		assert.equal((rows[1] as AnyNode).isExtraHeader, true);
+		assert.equal(asValue(asChildren(asChildren(rows[0])[0])[0]), 'R1A');
+		assert.equal(asValue(asChildren(asChildren(rows[1])[0])[0]), 'R2A');
 	});
 });

@@ -7,27 +7,12 @@
  *   and re-injected as extra header rows (`tableRow` with `isExtraHeader: true`).
  *
  * SERIALIZE direction (mdast → markdown):
- *   `tableRow` nodes with `isExtraHeader: true` inside a table are extracted
- *   and emitted as a paragraph of pipe-delimited text before the table,
- *   which round-trips correctly on next parse.
+ *   Handled in multiRowTableSchema.toMarkdown.runner via `preTableRow` mdast
+ *   nodes, which are stringified directly (no pipe escaping) with no blank line
+ *   before the table (join=0 registered here in toMarkdownExtensions).
  */
 
 import type { Paragraph, Root, Table, TableRow } from 'mdast';
-
-// ------------------------------------------------------------------
-// Helpers
-// ------------------------------------------------------------------
-
-function extractTextFromNode(node: {
-	value?: string;
-	children?: unknown[];
-}): string {
-	if (typeof node.value === 'string') return node.value;
-	if (!node.children) return '';
-	return (node.children as { value?: string; children?: unknown[] }[])
-		.map(extractTextFromNode)
-		.join('');
-}
 
 /** Parse a single pipe-row line into raw cell strings (without leading/trailing pipes). */
 function parsePipeRow(line: string): string[] | null {
@@ -153,84 +138,33 @@ function processParseDirection(tree: Root): void {
 }
 
 // ------------------------------------------------------------------
-// Serialize direction helpers
-// ------------------------------------------------------------------
-
-function processSerializeDirection(tree: Root): void {
-	const children = tree.children as unknown[];
-	for (let i = children.length - 1; i >= 0; i--) {
-		const node = children[i] as { type: string };
-		if (node.type !== 'table') continue;
-
-		const table = node as unknown as {
-			children: (TableRow & { isExtraHeader?: boolean })[];
-		};
-
-		const extraRows: (TableRow & { isExtraHeader?: boolean })[] = [];
-		const regularRows: (TableRow & { isExtraHeader?: boolean })[] = [];
-
-		for (const row of table.children) {
-			if (row.isExtraHeader) {
-				extraRows.push(row);
-			} else {
-				regularRows.push(row);
-			}
-		}
-
-		if (extraRows.length === 0) continue;
-
-		// Convert extra header rows back to pipe-delimited text lines.
-		const lines = extraRows.map((row) => {
-			const parts: string[] = [];
-			for (const cell of row.children) {
-				const c = cell as unknown as { colspan?: number; children?: unknown[] };
-				const colspan = c.colspan ?? 1;
-				const text = extractTextFromNode(
-					c as { value?: string; children?: unknown[] },
-				);
-				parts.push(text);
-				for (let k = 1; k < colspan; k++) {
-					parts.push('>');
-				}
-			}
-			return `| ${parts.join(' | ')} |`;
-		});
-
-		const paragraph = {
-			type: 'paragraph' as const,
-			children: [{ type: 'text' as const, value: lines.join('\n') }],
-		};
-
-		// Restore the table to only regular rows.
-		table.children = regularRows;
-
-		// Insert paragraph before the table.
-		children.splice(i, 0, paragraph);
-	}
-}
-
-// ------------------------------------------------------------------
 // Plugin export
 // ------------------------------------------------------------------
 
-export function remarkMultiRowHeader() {
-	return (tree: Root): void => {
-		// Detect direction: if any table already has `isExtraHeader` rows,
-		// we are in the serialize direction.
-		let isSerialize = false;
-		for (const node of tree.children) {
-			if (node.type !== 'table') continue;
-			const t = node as unknown as { children: { isExtraHeader?: boolean }[] };
-			if (t.children.some((r) => r.isExtraHeader)) {
-				isSerialize = true;
-				break;
-			}
-		}
+export function remarkMultiRowHeader(this: unknown) {
+	// Register a toMarkdownExtension that handles `preTableRow` nodes:
+	// - outputs the raw pipe-row text without escaping
+	// - uses join=0 so no blank line is inserted between the row(s) and the table
+	const processor = this as { data?(): Record<string, unknown> } | undefined;
+	const data = processor?.data?.() ?? {};
+	const ext = (data.toMarkdownExtensions as unknown[] | undefined) ?? [];
+	data.toMarkdownExtensions = ext;
+	ext.push({
+		handlers: {
+			preTableRow: (node: { value?: string }) => node.value ?? '',
+		},
+		join: [
+			(left: { type: string }, right: { type: string }) => {
+				if (left.type === 'preTableRow' && right.type === 'table') {
+					return 0; // single \n — no blank line before the table
+				}
+			},
+		],
+	});
 
-		if (isSerialize) {
-			processSerializeDirection(tree);
-		} else {
-			processParseDirection(tree);
-		}
+	return (tree: Root): void => {
+		// Parse direction only — serialize direction is handled in
+		// multiRowTableSchema.toMarkdown.runner via the preTableRow node.
+		processParseDirection(tree);
 	};
 }

@@ -310,9 +310,10 @@ export const multiRowTableSchema = tableSchema.extendSchema((prev) => (ctx) => {
 				});
 
 				if (extraLines.length > 0) {
-					state.addNode('paragraph', [
-						{ type: 'text', value: extraLines.join('\n') } as MarkdownNode,
-					]);
+					// Use preTableRow (custom node handled by remarkMultiRowHeader's
+					// toMarkdownExtension) so the output is unescaped and has no blank
+					// line between the header rows and the GFM table.
+					state.addNode('preTableRow', undefined, extraLines.join('\n'));
 				}
 
 				// Use the standard table_header_row for alignment info.
