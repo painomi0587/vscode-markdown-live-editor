@@ -604,7 +604,10 @@ body {
 	padding: 1px 5px;
 	font-size: 11px;
 	line-height: 1.4;
-	background: var(--vscode-button-secondaryBackground, rgba(128, 128, 128, 0.15));
+	background: var(
+		--vscode-button-secondaryBackground,
+		rgba(128, 128, 128, 0.15)
+	);
 	color: var(--vscode-button-secondaryForeground, inherit);
 	vertical-align: middle;
 	margin-right: 4px;
@@ -612,7 +615,10 @@ body {
 
 .extra-header-remove-btn:hover,
 .extra-header-add-btn:hover {
-	background: var(--vscode-button-secondaryHoverBackground, rgba(128, 128, 128, 0.3));
+	background: var(
+		--vscode-button-secondaryHoverBackground,
+		rgba(128, 128, 128, 0.3)
+	);
 }
 
 /* ============================================
