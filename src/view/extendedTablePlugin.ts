@@ -293,24 +293,36 @@ export const multiRowTableSchema = tableSchema.extendSchema((prev) => (ctx) => {
 		toMarkdown: {
 			match: (node: ProseNode) => node.type.name === 'table',
 			runner: (state: SerializerState, node: ProseNode) => {
-				// Use the standard table_header_row for alignment info.
-				let headerRowContent: ProseNode | null = null;
-				node.content.forEach((child) => {
-					if (!headerRowContent && child.type.name === 'table_header_row') {
-						headerRowContent = child.content as unknown as ProseNode;
-					}
+				// Emit extra_header_row nodes as a paragraph BEFORE the table.
+				// remark.stringify() does not run remark transform plugins, so we
+				// must handle the extra-row → paragraph conversion here instead of
+				// relying on remarkMultiRowHeader's serialize direction.
+				const extraLines: string[] = [];
+				node.forEach((child) => {
+					if (child.type.name !== 'extra_header_row') return;
+					const parts: string[] = [];
+					child.forEach((cell) => {
+						const colspan = (cell.attrs.colspan as number) ?? 1;
+						parts.push(cell.textContent);
+						for (let k = 1; k < colspan; k++) parts.push('>');
+					});
+					extraLines.push(`| ${parts.join(' | ')} |`);
 				});
 
+				if (extraLines.length > 0) {
+					state.addNode('paragraph', [
+						{ type: 'text', value: extraLines.join('\n') } as MarkdownNode,
+					]);
+				}
+
+				// Use the standard table_header_row for alignment info.
 				const align: (string | null)[] = [];
-				if (headerRowContent) {
-					(
-						headerRowContent as unknown as {
-							forEach(fn: (c: ProseNode) => void): void;
-						}
-					).forEach((cell: ProseNode) => {
+				node.forEach((child) => {
+					if (child.type.name !== 'table_header_row') return;
+					child.forEach((cell) => {
 						align.push((cell.attrs.alignment as string | null) ?? null);
 					});
-				}
+				});
 
 				(
 					state as unknown as {
@@ -321,7 +333,12 @@ export const multiRowTableSchema = tableSchema.extendSchema((prev) => (ctx) => {
 						): SerializerState;
 					}
 				).openNode('table', undefined, { align });
-				state.next(node.content);
+				// Process only non-extra-header rows inside the table.
+				node.forEach((child) => {
+					if (child.type.name !== 'extra_header_row') {
+						state.next(child);
+					}
+				});
 				(state as unknown as { closeNode(): SerializerState }).closeNode();
 			},
 		},
