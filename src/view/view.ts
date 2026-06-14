@@ -53,6 +53,7 @@ import {
 	mathViewPlugin,
 	remarkMathPlugin,
 } from './katexPlugin';
+import { multiRowHeaderUiPlugin } from './multiRowHeaderUiPlugin';
 import { mountSearchPanel } from './searchPanel';
 import { searchPlugin } from './searchPlugin';
 import { configureSlash, slash, slashKeyboardPlugin } from './slashPlugin';
@@ -344,6 +345,7 @@ async function createEditor(
 		.use(slash)
 		.config(configureSlash)
 		.use(tableMergePlugin)
+		.use(multiRowHeaderUiPlugin)
 		.use(slashKeyboardPlugin);
 
 	await instance.create();
@@ -827,6 +829,44 @@ document.addEventListener('unmerge-cell', (e) => {
 		]);
 
 		view.dispatch(tr);
+	});
+});
+
+// Handle add-extra-header / remove-extra-header events from multiRowHeaderUiPlugin
+document.addEventListener('add-extra-header', (e) => {
+	const { insertPos, colCount } = (e as CustomEvent).detail as {
+		insertPos: number;
+		colCount: number;
+	};
+	if (!editor) return;
+	editor.action((ctx) => {
+		const view = ctx.get(editorViewCtx);
+		const state = view.state;
+		const { extra_header_row, table_header, paragraph } = state.schema.nodes;
+		const cells: ProseMirrorNode[] = [];
+		for (let i = 0; i < colCount; i++) {
+			cells.push(
+				table_header.create(
+					{ colspan: 1, rowspan: 1, alignment: null },
+					paragraph.create(),
+				),
+			);
+		}
+		const newRow = extra_header_row.create({}, cells);
+		const mappedPos = state.tr.mapping.map(insertPos);
+		view.dispatch(state.tr.insert(mappedPos, newRow));
+	});
+});
+
+document.addEventListener('remove-extra-header', (e) => {
+	const { rowPos } = (e as CustomEvent).detail as { rowPos: number };
+	if (!editor) return;
+	editor.action((ctx) => {
+		const view = ctx.get(editorViewCtx);
+		const state = view.state;
+		const node = state.doc.nodeAt(rowPos);
+		if (!node || node.type.name !== 'extra_header_row') return;
+		view.dispatch(state.tr.delete(rowPos, rowPos + node.nodeSize));
 	});
 });
 

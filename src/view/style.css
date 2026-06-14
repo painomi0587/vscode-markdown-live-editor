@@ -589,6 +589,32 @@ body {
 	border-color: rgba(128, 128, 128, 0.35);
 }
 
+.ProseMirror tr[data-extra-header] th {
+	border-color: rgba(128, 128, 128, 0.69);
+	background-color: rgba(128, 128, 128, 0.08);
+}
+
+.extra-header-remove-btn,
+.extra-header-add-btn {
+	display: inline-flex;
+	align-items: center;
+	cursor: pointer;
+	border: 1px solid rgba(128, 128, 128, 0.5);
+	border-radius: 3px;
+	padding: 1px 5px;
+	font-size: 11px;
+	line-height: 1.4;
+	background: var(--vscode-button-secondaryBackground, rgba(128, 128, 128, 0.15));
+	color: var(--vscode-button-secondaryForeground, inherit);
+	vertical-align: middle;
+	margin-right: 4px;
+}
+
+.extra-header-remove-btn:hover,
+.extra-header-add-btn:hover {
+	background: var(--vscode-button-secondaryHoverBackground, rgba(128, 128, 128, 0.3));
+}
+
 /* ============================================
    Interactive table block (@milkdown/components)
    Based on Milkdown Crepe theme, adapted for VS Code
