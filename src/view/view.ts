@@ -402,7 +402,14 @@ function buildTableLayout(table: ProseMirrorNode, tableStart: number) {
 	const rowSpanCounts: number[] = [];
 
 	table.forEach((row, rowOffset) => {
-		if (row.type.name !== 'table_row') return;
+		// Include all row types so ⊠ unmerge works for cells in any row
+		// (table_row, table_header_row, extra_header_row).
+		if (
+			row.type.name !== 'table_row' &&
+			row.type.name !== 'table_header_row' &&
+			row.type.name !== 'extra_header_row'
+		)
+			return;
 		const rowPos = tableStart + 1 + rowOffset;
 		const cells: CellInfo[] = [];
 		let col = 0;
