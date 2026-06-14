@@ -88,8 +88,10 @@
 - [x] `tsconfig.test.json` に multiRowHeaderPlugin.ts を追加
 - [x] lint (biome) PASS / 型チェック (tsc --noEmit) PASS
 - [x] test:unit 55/55 PASS / esbuild bundle PASS
-- [ ] CSS: `tr[data-extra-header]` をヘッダー行として見た目に反映（Phase E）
-- [ ] UI: ヘッダー行の追加・削除ボタン（Phase E）
+- [x] CSS: `tr[data-extra-header]` をヘッダー行として見た目に反映（Phase E）
+- [x] UI: ヘッダー行の追加・削除ボタン（Phase E）
+- [x] CSS: `tr[data-is-header] th` にも同じグレー背景を追加（v0.1.6）
+- [x] バグ修正: media/view.js が古いバンドルだったため再コンパイル（v0.1.5 fix を含む）
 
 #### 日記
 
@@ -98,3 +100,9 @@
 **今の見立て**: Phase A〜D（remark プラグイン・スキーマ・view 登録・unmerge 対応）は完了。残りは Phase E（CSS + UI ボタン）のみ。ユーザー承認待ちで一旦コミットして問題ない状態。
 **次の自分へ**: Phase E: `media/styles.css`（または webview 用の CSS ファイル）で `tr[data-extra-header] th` をヘッダーとして装飾する。ボタンは tableBlockPlugin や tableMergePlugin の既存パターンを参考に実装する。
 **気になっていること**: extra_header_row の `toMarkdown.runner` で `openNode` を `as unknown as` でキャストしている。型安全ではないが SerializerState の公開 API が限られているため止む無し。
+
+##### 2026-06-14 — バンドル未コンパイル問題と CSS 修正
+**やったこと**: ユーザーが「まだbodyに落ちます」と報告。`media/view.js` を確認したところ v0.1.5 の修正が含まれていなかった（未コンパイル状態）。`npm run compile` で再ビルド。また標準ヘッダー行（`tr[data-is-header] th`）にグレー背景 CSS を追加 — extra_header_row と同じスタイルにすることで視覚的な混乱を解消。v0.1.6 としてコミット。
+**今の見立て**: コード上の serialize/parse ロジックは正しい。ユーザーの問題は「バンドル古い」か「既存ファイルが旧バージョンで壊れた」のいずれか。CSS 修正で視覚的誤認も解消される。
+**次の自分へ**: Plan 0002 は実質完了。次は品質検証フロー（コードレビュー・ノウハウ記録・Progress アーカイブ・TODO 更新）を実行するか、ユーザーの次の要望を待つ。
+**気になっていること**: 旧バージョンで保存されたファイルはピパラグラフなしのテーブルになっているため、自動復旧できない。ユーザーに手動修正を案内する必要があるかもしれない。
