@@ -135,6 +135,7 @@ export const extendedTableHeaderSchema = tableHeaderSchema.extendSchema(
 				...prevSchema.attrs,
 				colspan: { default: 1 },
 				rowspan: { default: 1 },
+				covered: { default: false },
 			},
 			parseDOM: [
 				{
@@ -145,33 +146,35 @@ export const extendedTableHeaderSchema = tableHeaderSchema.extendSchema(
 							alignment: dom.style.textAlign || null,
 							colspan: Number(dom.getAttribute('colspan') || 1),
 							rowspan: Number(dom.getAttribute('rowspan') || 1),
+							covered: dom.getAttribute('data-covered') === 'true',
 						};
 					},
 				},
 			],
-			toDOM: (node: ProseNode) => [
-				'th',
-				{
-					...(node.attrs.alignment
-						? { style: `text-align: ${node.attrs.alignment}` }
-						: {}),
-					...(node.attrs.colspan > 1
-						? { colspan: String(node.attrs.colspan) }
-						: {}),
-					...(node.attrs.rowspan > 1
-						? { rowspan: String(node.attrs.rowspan) }
-						: {}),
-				},
-				0,
-			],
+			toDOM: (node: ProseNode) => {
+				const domAttrs: Record<string, string> = {};
+				if (node.attrs.alignment)
+					domAttrs.style = `text-align: ${node.attrs.alignment}`;
+				if (node.attrs.colspan > 1)
+					domAttrs.colspan = String(node.attrs.colspan);
+				if (node.attrs.rowspan > 1)
+					domAttrs.rowspan = String(node.attrs.rowspan);
+				if (node.attrs.covered) {
+					domAttrs['data-covered'] = 'true';
+					domAttrs.style = 'display:none;padding:0;border:none;width:0;';
+				}
+				return ['th', domAttrs, 0] as [string, Record<string, string>, number];
+			},
 			parseMarkdown: {
 				match: (node: MarkdownNode) => isTableHeaderMarkdownNode(node),
 				runner: (state: ParserState, node: MarkdownNode, type: NodeType) => {
 					const alignment = (node.align as string) || null;
 					const colspan = (node.colspan as number) || 1;
 					const rowspan = (node.rowspan as number) || 1;
+					const covered = !!(node as unknown as { isCovered?: boolean })
+						.isCovered;
 					state
-						.openNode(type, { alignment, colspan, rowspan })
+						.openNode(type, { alignment, colspan, rowspan, covered })
 						.openNode(state.schema.nodes.paragraph as NodeType)
 						.next(node.children)
 						.closeNode()

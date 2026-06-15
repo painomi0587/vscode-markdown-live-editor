@@ -60,6 +60,19 @@ function countTableCols(row: TableRow): number {
 	return n;
 }
 
+/**
+ * Build a column-position → cell-index map.
+ * e.g. cells=[A(cs=2), B(cs=1)] → [0, 0, 1]
+ */
+function buildColLayout(cells: Array<{ colspan?: number }>): number[] {
+	const layout: number[] = [];
+	for (let i = 0; i < cells.length; i++) {
+		const cs = cells[i].colspan ?? 1;
+		for (let k = 0; k < cs; k++) layout.push(i);
+	}
+	return layout;
+}
+
 // ------------------------------------------------------------------
 // Parse direction helpers
 // ------------------------------------------------------------------
@@ -97,6 +110,8 @@ function processParseDirection(tree: Root): void {
 		if (lines.length === 0) continue;
 
 		const extraRows: (TableRow & { isExtraHeader: true })[] = [];
+		// Track the previous extra-row's mdast cells for ^ resolution.
+		let prevMdastCells: Array<Record<string, unknown>> | null = null;
 		let allValid = true;
 
 		for (const line of lines) {
@@ -107,19 +122,65 @@ function processParseDirection(tree: Root): void {
 			}
 
 			const processed = processColspan(rawCells);
-			const effectiveCols = processed.reduce((s, c) => s + c.colspan, 0);
+			const prevLayout = prevMdastCells
+				? buildColLayout(prevMdastCells as Array<{ colspan?: number }>)
+				: [];
+
+			// Count effective columns: ^ inherits colspan from the cell above.
+			let effectiveCols = 0;
+			let colPos = 0;
+			for (const cell of processed) {
+				if (cell.value === '^' && prevMdastCells) {
+					const prevIdx = prevLayout[colPos];
+					const cs =
+						prevIdx !== undefined
+							? ((prevMdastCells[prevIdx].colspan as number | undefined) ?? 1)
+							: 1;
+					effectiveCols += cs;
+					colPos += cs;
+				} else {
+					effectiveCols += cell.colspan;
+					colPos += cell.colspan;
+				}
+			}
 			if (effectiveCols !== colCount) {
 				allValid = false;
 				break;
 			}
 
-			const mdastCells = processed.map((c) => ({
-				type: 'tableCell' as const,
-				isHeader: true as const,
-				...(c.colspan > 1 ? { colspan: c.colspan } : {}),
-				children: [{ type: 'text' as const, value: c.value }],
-			}));
+			// Build mdast cells, resolving ^ into rowspan on the cell above.
+			const mdastCells: Record<string, unknown>[] = [];
+			colPos = 0;
+			for (const cell of processed) {
+				if (cell.value === '^' && prevMdastCells) {
+					const prevIdx = prevLayout[colPos];
+					if (prevIdx !== undefined) {
+						const prevCell = prevMdastCells[prevIdx];
+						prevCell.rowspan =
+							((prevCell.rowspan as number | undefined) ?? 1) + 1;
+						const cs = (prevCell.colspan as number | undefined) ?? 1;
+						mdastCells.push({
+							type: 'tableCell',
+							isHeader: true,
+							isCovered: true,
+							colspan: cs,
+							children: [{ type: 'text', value: '^' }],
+						});
+						colPos += cs;
+						continue;
+					}
+				}
+				const mdastCell: Record<string, unknown> = {
+					type: 'tableCell',
+					isHeader: true,
+					children: [{ type: 'text', value: cell.value }],
+				};
+				if (cell.colspan > 1) mdastCell.colspan = cell.colspan;
+				mdastCells.push(mdastCell);
+				colPos += cell.colspan;
+			}
 
+			prevMdastCells = mdastCells;
 			extraRows.push({
 				type: 'tableRow' as const,
 				isExtraHeader: true as const,
@@ -128,6 +189,41 @@ function processParseDirection(tree: Root): void {
 		}
 
 		if (!allValid || extraRows.length === 0) continue;
+
+		// Resolve ^ in the standard GFM header row (table.children[0]) to extend
+		// cells in the last extra header row.
+		{
+			const lastExtraCells = (
+				extraRows[extraRows.length - 1] as unknown as {
+					children: Array<Record<string, unknown>>;
+				}
+			).children;
+			const lastLayout = buildColLayout(
+				lastExtraCells as Array<{ colspan?: number }>,
+			);
+			const stdHeader = table.children[0] as unknown as {
+				children: Array<{
+					children: Array<{ value?: string }>;
+					colspan?: number;
+					isCovered?: boolean;
+				}>;
+			};
+			let colPos = 0;
+			for (const cell of stdHeader.children) {
+				const text = cell.children[0]?.value ?? '';
+				const cs = cell.colspan ?? 1;
+				if (text === '^') {
+					const prevIdx = lastLayout[colPos];
+					if (prevIdx !== undefined) {
+						const extCell = lastExtraCells[prevIdx];
+						extCell.rowspan =
+							((extCell.rowspan as number | undefined) ?? 1) + 1;
+						cell.isCovered = true;
+					}
+				}
+				colPos += cs;
+			}
+		}
 
 		// Prepend extra header rows to the table.
 		table.children = [...extraRows, ...table.children];

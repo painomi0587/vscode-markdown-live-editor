@@ -785,36 +785,64 @@ document.addEventListener('unmerge-cell', (e) => {
 			for (let i = targetRowIndex + 1; i < targetRowIndex + rowspan; i++) {
 				if (i >= rows.length) continue;
 				const rowInfo = rows[i];
-				let computedPos = rowInfo.rowPos + rowInfo.row.nodeSize - 1;
 
 				const targetColumn = targetCellInfo.startColumn;
-				const beforeCell = rowInfo.cells.find(
-					(cell) => cell.startColumn >= targetColumn,
+
+				// Covered ^ cells from multi-row header rowspan live at exactly
+				// the columns we need to fill.  Replace them in-place rather than
+				// inserting new cells, which would inflate the column count and
+				// break round-trip serialization.
+				const coveredInRange = rowInfo.cells.filter(
+					(cell) =>
+						cell.startColumn >= targetColumn &&
+						cell.startColumn < targetColumn + colspan &&
+						(cell.node.attrs.covered as boolean),
 				);
-				const previousCell = [...rowInfo.cells]
-					.filter((cell) => cell.startColumn < targetColumn)
-					.pop();
 
-				if (beforeCell) {
-					computedPos = beforeCell.pos;
-				} else if (
-					previousCell &&
-					previousCell.startColumn + previousCell.colspan > targetColumn
-				) {
-					computedPos = previousCell.pos + previousCell.node.nodeSize;
-				}
+				if (coveredInRange.length > 0) {
+					// Process in reverse order so later positions shift first.
+					for (let k = coveredInRange.length - 1; k >= 0; k--) {
+						const cc = coveredInRange[k];
+						const cellPos = tr.mapping.map(cc.pos);
+						const uncovered = cellType.create({
+							colspan: 1,
+							rowspan: 1,
+							alignment: null,
+							covered: false,
+						});
+						tr.replaceWith(cellPos, cellPos + cc.node.nodeSize, uncovered);
+					}
+				} else {
+					let computedPos = rowInfo.rowPos + rowInfo.row.nodeSize - 1;
 
-				// Map through preceding insertions so position stays correct
-				// when multiple rows need placeholder cells (rowspan > 2).
-				const insertPos = tr.mapping.map(computedPos);
+					const beforeCell = rowInfo.cells.find(
+						(cell) => cell.startColumn >= targetColumn,
+					);
+					const previousCell = [...rowInfo.cells]
+						.filter((cell) => cell.startColumn < targetColumn)
+						.pop();
 
-				for (let j = colspan - 1; j >= 0; j--) {
-					const placeholderCell = cellType.create({
-						colspan: 1,
-						rowspan: 1,
-						alignment: null,
-					});
-					tr.insert(insertPos, placeholderCell);
+					if (beforeCell) {
+						computedPos = beforeCell.pos;
+					} else if (
+						previousCell &&
+						previousCell.startColumn + previousCell.colspan > targetColumn
+					) {
+						computedPos = previousCell.pos + previousCell.node.nodeSize;
+					}
+
+					// Map through preceding insertions so position stays correct
+					// when multiple rows need placeholder cells (rowspan > 2).
+					const insertPos = tr.mapping.map(computedPos);
+
+					for (let j = colspan - 1; j >= 0; j--) {
+						const placeholderCell = cellType.create({
+							colspan: 1,
+							rowspan: 1,
+							alignment: null,
+						});
+						tr.insert(insertPos, placeholderCell);
+					}
 				}
 			}
 		}

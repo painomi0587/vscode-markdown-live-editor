@@ -230,3 +230,119 @@ describe('remarkMultiRowHeader — serialize format (parse of new output)', () =
 		assert.equal(asValue(asChildren(asChildren(rows[1])[0])[0]), 'R2A');
 	});
 });
+
+// -------------------------------------------------------------------
+// ^ (rowspan) handling in extra header rows
+// -------------------------------------------------------------------
+
+describe('remarkMultiRowHeader — ^ rowspan handling', () => {
+	it('^ in standard GFM header extends the extra header row cell above (sets rowspan)', () => {
+		// Paragraph: | 項番 | 名前 | 保護 | > |
+		// Standard header: | ^ | ^ | A | B |
+		// ^ at col 0 → 項番 gets rowspan=2; ^ at col 1 → 名前 gets rowspan=2
+		const p = paragraph(text('| 項番 | 名前 | 保護 | > |'));
+		const headerRow = tableRow(
+			[tableCell('^'), tableCell('^'), tableCell('A'), tableCell('B')],
+			{ isHeader: true },
+		);
+		const t = table([headerRow]);
+		const tree = root(p, t);
+
+		runPlugin(tree);
+
+		assert.equal(tree.children.length, 1, 'paragraph consumed');
+		const rows = asChildren(tree.children[0]);
+		assert.equal(rows.length, 2); // 1 extra + 1 standard
+
+		// Extra header row: 項番(rs=2), 名前(rs=2), 保護(cs=2)
+		const extraRow = rows[0] as AnyNode;
+		assert.equal(extraRow.isExtraHeader, true);
+		const extraCells = asChildren(extraRow);
+		assert.equal(extraCells.length, 3); // 項番, 名前, 保護 (> was merged)
+		assert.equal(asValue(asChildren(extraCells[0])[0]), '項番');
+		assert.equal((extraCells[0] as AnyNode).rowspan, 2, '項番 rowspan=2');
+		assert.equal(asValue(asChildren(extraCells[1])[0]), '名前');
+		assert.equal((extraCells[1] as AnyNode).rowspan, 2, '名前 rowspan=2');
+		assert.equal(asValue(asChildren(extraCells[2])[0]), '保護');
+		assert.equal((extraCells[2] as AnyNode).colspan, 2, '保護 colspan=2');
+
+		// Standard header row: ^ cells are marked isCovered, A and B unchanged
+		const stdRow = rows[1] as AnyNode;
+		const stdCells = asChildren(stdRow);
+		assert.equal(stdCells.length, 4);
+		assert.equal((stdCells[0] as AnyNode).isCovered, true, '^[0] isCovered');
+		assert.equal((stdCells[1] as AnyNode).isCovered, true, '^[1] isCovered');
+		assert.equal(asValue(asChildren(stdCells[2])[0]), 'A');
+		assert.equal(asValue(asChildren(stdCells[3])[0]), 'B');
+	});
+
+	it('^ in extra row paragraph extends the previous extra row (multi-line paragraph)', () => {
+		// Line 1: | A | B |   → extra row 1: A(rs=2), B
+		// Line 2: | ^ | C |   → extra row 2: ^(covered), C
+		// Standard header: | H1 | H2 |
+		const p = paragraph(text('| A | B |\n| ^ | C |'));
+		const headerRow = tableRow([tableCell('H1'), tableCell('H2')], { isHeader: true });
+		const t = table([headerRow]);
+		const tree = root(p, t);
+
+		runPlugin(tree);
+
+		assert.equal(tree.children.length, 1);
+		const rows = asChildren(tree.children[0]);
+		assert.equal(rows.length, 3); // 2 extra + 1 standard
+
+		const extraRow1 = rows[0] as AnyNode;
+		const cells1 = asChildren(extraRow1);
+		assert.equal(cells1.length, 2);
+		assert.equal(asValue(asChildren(cells1[0])[0]), 'A');
+		assert.equal((cells1[0] as AnyNode).rowspan, 2, 'A gets rowspan=2');
+
+		const extraRow2 = rows[1] as AnyNode;
+		const cells2 = asChildren(extraRow2);
+		assert.equal(cells2.length, 2);
+		assert.equal((cells2[0] as AnyNode).isCovered, true, '^ cell is covered');
+		assert.equal(asValue(asChildren(cells2[1])[0]), 'C');
+	});
+
+	it('^ in extra row inherits colspan when extending a wide cell', () => {
+		// Line 1: | X | > | Y |   → X(cs=2, rs=1), Y(cs=1)
+		// Line 2: | ^ | Z |       → ^ extends X (inherits cs=2), Z at col 3
+		// effectiveCols = 2+1 = 3 ✓ (matches standard header with 3 cols)
+		const p = paragraph(text('| X | > | Y |\n| ^ | Z |'));
+		const headerRow = tableRow(
+			[tableCell('H1'), tableCell('H2'), tableCell('H3')],
+			{ isHeader: true },
+		);
+		const t = table([headerRow]);
+		const tree = root(p, t);
+
+		runPlugin(tree);
+
+		const rows = asChildren(tree.children[0]);
+		assert.equal(rows.length, 3); // 2 extra + 1 standard
+
+		const extra1Cells = asChildren(rows[0]);
+		assert.equal((extra1Cells[0] as AnyNode).colspan, 2, 'X colspan=2');
+		assert.equal((extra1Cells[0] as AnyNode).rowspan, 2, 'X rowspan=2 after ^');
+
+		const extra2Cells = asChildren(rows[1]);
+		assert.equal(extra2Cells.length, 2);
+		assert.equal((extra2Cells[0] as AnyNode).isCovered, true);
+		assert.equal((extra2Cells[0] as AnyNode).colspan, 2, 'covered ^ inherits cs=2');
+		assert.equal(asValue(asChildren(extra2Cells[1])[0]), 'Z');
+	});
+
+	it('^ column count mismatch (^ does not extend a known cell) → paragraph not consumed', () => {
+		// Line 1: | A |   (1 col)
+		// Line 2: | ^ | B | (^ extends A, B at col 1 → effective 2 cols ≠ 1 col in header)
+		const p = paragraph(text('| A |\n| ^ | B |'));
+		const headerRow = tableRow([tableCell('H1')], { isHeader: true });
+		const t = table([headerRow]);
+		const tree = root(p, t);
+
+		runPlugin(tree);
+
+		// effectiveCols for line 2: ^(inherits 1)+B(1)=2 ≠ colCount=1 → invalid
+		assert.equal(tree.children.length, 2, 'paragraph NOT consumed due to mismatch');
+	});
+});
