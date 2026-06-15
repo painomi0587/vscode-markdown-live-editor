@@ -788,15 +788,18 @@ document.addEventListener('unmerge-cell', (e) => {
 
 				const targetColumn = targetCellInfo.startColumn;
 
-				// Covered ^ cells from multi-row header rowspan live at exactly
-				// the columns we need to fill.  Replace them in-place rather than
-				// inserting new cells, which would inflate the column count and
-				// break round-trip serialization.
+				// Replace existing placeholder cells rather than inserting new ones.
+				// Two kinds of placeholder occupy the spanned columns:
+				//   1. table_header cells with covered=true (multi-row header rows)
+				//   2. table_cell cells whose text is "^" (remark-extended-table body rows)
+				// Inserting alongside either kind inflates the column count and breaks
+				// round-trip serialization, so we replace them in-place instead.
 				const coveredInRange = rowInfo.cells.filter(
 					(cell) =>
 						cell.startColumn >= targetColumn &&
 						cell.startColumn < targetColumn + colspan &&
-						(cell.node.attrs.covered as boolean),
+						((cell.node.attrs.covered as boolean) ||
+							cell.node.textContent === '^'),
 				);
 
 				if (coveredInRange.length > 0) {
@@ -804,12 +807,15 @@ document.addEventListener('unmerge-cell', (e) => {
 					for (let k = coveredInRange.length - 1; k >= 0; k--) {
 						const cc = coveredInRange[k];
 						const cellPos = tr.mapping.map(cc.pos);
-						const uncovered = cellType.create({
+						const newAttrs: Record<string, unknown> = {
 							colspan: 1,
 							rowspan: 1,
 							alignment: null,
-							covered: false,
-						});
+						};
+						if (cc.node.type.name === 'table_header') {
+							newAttrs.covered = false;
+						}
+						const uncovered = cc.node.type.create(newAttrs);
 						tr.replaceWith(cellPos, cellPos + cc.node.nodeSize, uncovered);
 					}
 				} else {
