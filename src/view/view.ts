@@ -24,6 +24,7 @@ import { autoPairPlugin } from './autoPairPlugin';
 import { codeBlockPlugin, highlightPlugin } from './codeBlockPlugin';
 import {
 	cleanupTableBr,
+	cleanupTableEscapes,
 	countText,
 	type HeadingData,
 	headingsEqual,
@@ -162,7 +163,7 @@ const syncPlugin = $prose((ctx) => {
 					updateTimer = setTimeout(() => {
 						updateTimer = null;
 						const serializer = ctx.get(serializerCtx);
-						const md = cleanupTableBr(serializer(view.state.doc));
+						const md = cleanupTableEscapes(cleanupTableBr(serializer(view.state.doc)));
 						if (md === normalizedBaseline) return;
 						syncDebug('post-update', {
 							length: md.length,
@@ -353,9 +354,9 @@ async function createEditor(
 	// Capture the normalized baseline after editor is fully initialized
 	instance.action((ctx) => {
 		const serializer = ctx.get(serializerCtx);
-		normalizedBaseline = cleanupTableBr(
+		normalizedBaseline = cleanupTableEscapes(cleanupTableBr(
 			serializer(ctx.get(editorStateCtx).doc),
-		);
+		));
 	});
 
 	// If a remote update arrived while the editor was still initializing,
@@ -464,10 +465,10 @@ function replaceContent(newMarkdown: string): void {
 		editor.action((ctx) => {
 			const view = ctx.get(editorViewCtx);
 			const serializer = ctx.get(serializerCtx);
-			const currentMarkdown = cleanupTableBr(
+			const currentMarkdown = cleanupTableEscapes(cleanupTableBr(
 				serializer(ctx.get(editorStateCtx).doc),
-			);
-			const normalizedIncomingMarkdown = cleanupTableBr(newMarkdown);
+			));
+			const normalizedIncomingMarkdown = cleanupTableEscapes(cleanupTableBr(newMarkdown));
 			if (normalizedIncomingMarkdown === currentMarkdown) {
 				syncDebug('replace-skip-noop', {
 					incomingLength: normalizedIncomingMarkdown.length,
@@ -494,7 +495,7 @@ function replaceContent(newMarkdown: string): void {
 
 			// Update baseline to the new normalized content
 			const updatedDoc = ctx.get(editorStateCtx).doc;
-			normalizedBaseline = cleanupTableBr(serializer(updatedDoc));
+			normalizedBaseline = cleanupTableEscapes(cleanupTableBr(serializer(updatedDoc)));
 			isUpdatingFromExtension = false;
 			sendHeadings(updatedDoc);
 			sendWordCount(updatedDoc);
