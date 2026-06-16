@@ -121,11 +121,12 @@ describe('remarkMultiRowHeader — parse direction', () => {
 		assert.equal((rows[1] as AnyNode).isExtraHeader, true);
 	});
 
-	it('handles > colspan markers: > extends the cell to its LEFT', () => {
-		// "| A | > | B |" → A(colspan=2), B(colspan=1)
+	it('handles > colspan markers: > extends the cell to its RIGHT', () => {
+		// "| > | A | B |" → A(colspan=2), B(colspan=1)
+		// Same semantics as remark-extended-table body rows.
 		// Standard header row has 3 effective cols: A(2) + B(1) = 3
 		// So the table header needs [H1, H2, H3] to match
-		const p = paragraph(text('| A | > | B |'));
+		const p = paragraph(text('| > | A | B |'));
 		const headerRow = tableRow(
 			[tableCell('H1'), tableCell('H2'), tableCell('H3')],
 			{ isHeader: true },
@@ -149,9 +150,31 @@ describe('remarkMultiRowHeader — parse direction', () => {
 		assert.equal(asValue(asChildren(extraCells[1])[0]), 'B');
 	});
 
+	it('a trailing > with no right cell is treated as literal text (same as remark-extended-table)', () => {
+		// "| A | > |" → A(colspan=1), >(literal) — trailing > has no right cell to extend
+		// effective cols = 1 + 1(literal >) = 2, header has 2 cols → matches
+		const p = paragraph(text('| A | > |'));
+		const headerRow = tableRow(
+			[tableCell('H1'), tableCell('H2')],
+			{ isHeader: true },
+		);
+		const t = table([headerRow]);
+		const tree = root(p, t);
+
+		runPlugin(tree);
+
+		// Trailing > is treated as literal text — paragraph is consumed (col count matches)
+		assert.equal(tree.children.length, 1);
+		const extraCells = asChildren(asChildren(tree.children[0])[0]);
+		assert.equal(extraCells.length, 2);
+		assert.equal(asValue(asChildren(extraCells[0])[0]), 'A');
+		// > remains as literal text
+		assert.equal(asValue(asChildren(extraCells[1])[0]), '>');
+	});
+
 	it('handles consecutive > markers for wider spans', () => {
-		// "| A | > | > | B |" → A(colspan=3), B(colspan=1)
-		const p = paragraph(text('| A | > | > | B |'));
+		// "| > | > | A | B |" → A(colspan=3), B(colspan=1)
+		const p = paragraph(text('| > | > | A | B |'));
 		const headerRow = tableRow(
 			[tableCell('H1'), tableCell('H2'), tableCell('H3'), tableCell('H4')],
 			{ isHeader: true },
@@ -193,13 +216,14 @@ describe('remarkMultiRowHeader — serialize format (parse of new output)', () =
 	});
 
 	it('round-trip: parse the new serialized format (pipe rows, no blank line before table)', () => {
-		// The Milkdown runner serializes extra header rows as:
-		//   | A | > | B |
-		//   | 1 | 2 | 3 |   ← standard GFM table (header + sep + body)
-		//   | - | - | - |
-		// remark-gfm parses this as paragraph("| A | > | B |") + table.
+		// The Milkdown runner serializes extra header rows with `>` BEFORE the
+		// spanning cell (consistent with remark-extended-table body rows):
+		//   | > | A | B |
+		//   | H1 | H2 | H3 |   ← standard GFM table (header + sep + body)
+		//   | -- | -- | -- |
+		// remark-gfm parses this as paragraph("| > | A | B |") + table.
 		// Our plugin then converts the paragraph back to an extra_header_row.
-		const p = paragraph(text('| A | > | B |'));
+		const p = paragraph(text('| > | A | B |'));
 		const headerRow = tableRow([tableCell('H1'), tableCell('H2'), tableCell('H3')], { isHeader: true });
 		const t = table([headerRow]);
 		const tree = root(p, t);
@@ -237,10 +261,11 @@ describe('remarkMultiRowHeader — serialize format (parse of new output)', () =
 
 describe('remarkMultiRowHeader — ^ rowspan handling', () => {
 	it('^ in standard GFM header extends the extra header row cell above (sets rowspan)', () => {
-		// Paragraph: | 項番 | 名前 | 保護 | > |
+		// Paragraph: | 項番 | 名前 | > | 保護 |
+		// (> BEFORE 保護: 保護 gets colspan=2; 項番 and 名前 are separate)
 		// Standard header: | ^ | ^ | A | B |
 		// ^ at col 0 → 項番 gets rowspan=2; ^ at col 1 → 名前 gets rowspan=2
-		const p = paragraph(text('| 項番 | 名前 | 保護 | > |'));
+		const p = paragraph(text('| 項番 | 名前 | > | 保護 |'));
 		const headerRow = tableRow(
 			[tableCell('^'), tableCell('^'), tableCell('A'), tableCell('B')],
 			{ isHeader: true },
@@ -258,7 +283,7 @@ describe('remarkMultiRowHeader — ^ rowspan handling', () => {
 		const extraRow = rows[0] as AnyNode;
 		assert.equal(extraRow.isExtraHeader, true);
 		const extraCells = asChildren(extraRow);
-		assert.equal(extraCells.length, 3); // 項番, 名前, 保護 (> was merged)
+		assert.equal(extraCells.length, 3); // 項番, 名前, 保護 (> was removed)
 		assert.equal(asValue(asChildren(extraCells[0])[0]), '項番');
 		assert.equal((extraCells[0] as AnyNode).rowspan, 2, '項番 rowspan=2');
 		assert.equal(asValue(asChildren(extraCells[1])[0]), '名前');
@@ -305,10 +330,10 @@ describe('remarkMultiRowHeader — ^ rowspan handling', () => {
 	});
 
 	it('^ in extra row inherits colspan when extending a wide cell', () => {
-		// Line 1: | X | > | Y |   → X(cs=2, rs=1), Y(cs=1)
+		// Line 1: | > | X | Y |   → X(cs=2, rs=1), Y(cs=1)
 		// Line 2: | ^ | Z |       → ^ extends X (inherits cs=2), Z at col 3
 		// effectiveCols = 2+1 = 3 ✓ (matches standard header with 3 cols)
-		const p = paragraph(text('| X | > | Y |\n| ^ | Z |'));
+		const p = paragraph(text('| > | X | Y |\n| ^ | Z |'));
 		const headerRow = tableRow(
 			[tableCell('H1'), tableCell('H2'), tableCell('H3')],
 			{ isHeader: true },
