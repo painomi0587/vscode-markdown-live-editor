@@ -46,7 +46,7 @@ function processColspan(
 	for (let j = cells.length - 1; j >= 0; j--) {
 		if (cells[j].value !== '>') continue;
 		// A trailing `>` with no right cell is treated as literal text (ignored).
-		if (j >= cells.length - 1) continue;
+		if (j === cells.length - 1) continue;
 		// Extend each `>` chain: add colspan to the next non-`>` cell to the right.
 		for (let k = 1; j + k < cells.length; k++) {
 			cells[j + k].colspan += 1;
@@ -71,8 +71,10 @@ function processColspan(
 // ---------------------------------------------------------------------------
 
 type AnyNode = Record<string, unknown> & { type: string };
-type AnyRow = { children: AnyNode[] };
-type AnyTable = { children: AnyRow[]; align?: (string | null)[] };
+type AnyTable = {
+	children: { children: AnyNode[] }[];
+	align?: (string | null)[];
+};
 
 function makeColspanCell(): AnyNode {
 	return {
@@ -87,6 +89,19 @@ function makeRowspanCell(): AnyNode {
 		children: [{ type: 'tableCellRowspan', children: [] }],
 	};
 }
+
+// Cache gfmTableToMarkdown handler once at module load to avoid repeated allocations.
+const _rawGfmExt = gfmTableToMarkdown() as unknown as {
+	handlers?: {
+		table?: (n: AnyTable, p: unknown, c: unknown, s: unknown) => string;
+	};
+};
+if (typeof _rawGfmExt.handlers?.table !== 'function') {
+	throw new Error(
+		'mdast-util-gfm-table internal API changed: handlers.table not found',
+	);
+}
+const _gfmTableHandler = _rawGfmExt.handlers.table;
 
 function customTableHandler(
 	node: AnyTable,
@@ -123,13 +138,7 @@ function customTableHandler(
 			j += 1 + offsetCol;
 		}
 	}
-	return (
-		gfmTableToMarkdown() as unknown as {
-			handlers: {
-				table: (n: AnyTable, p: unknown, c: unknown, s: unknown) => string;
-			};
-		}
-	).handlers.table(node, parent, context, safeOptions);
+	return _gfmTableHandler(node, parent, context, safeOptions);
 }
 
 /** Count effective columns in a table row (summing colspan values). */

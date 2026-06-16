@@ -190,6 +190,28 @@ describe('remarkMultiRowHeader — parse direction', () => {
 		assert.equal((extraCells[0] as AnyNode).colspan, 3);
 		assert.equal(asValue(asChildren(extraCells[0])[0]), 'A');
 	});
+
+	it('handles two independent colspan groups in one row', () => {
+		// "| > | A | > | B |" → A(colspan=2), B(colspan=2)
+		// Each > is independent; they extend separate cells.
+		const p = paragraph(text('| > | A | > | B |'));
+		const headerRow = tableRow(
+			[tableCell('H1'), tableCell('H2'), tableCell('H3'), tableCell('H4')],
+			{ isHeader: true },
+		);
+		const t = table([headerRow]);
+		const tree = root(p, t);
+
+		runPlugin(tree);
+
+		assert.equal(tree.children.length, 1);
+		const extraCells = asChildren(asChildren(tree.children[0])[0]);
+		assert.equal(extraCells.length, 2); // both > removed
+		assert.equal((extraCells[0] as AnyNode).colspan, 2, 'A colspan=2');
+		assert.equal(asValue(asChildren(extraCells[0])[0]), 'A');
+		assert.equal((extraCells[1] as AnyNode).colspan, 2, 'B colspan=2');
+		assert.equal(asValue(asChildren(extraCells[1])[0]), 'B');
+	});
 });
 
 // -------------------------------------------------------------------
