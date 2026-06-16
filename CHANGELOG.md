@@ -2,6 +2,13 @@
 
 All notable changes to Markdown Live Editor will be documented in this file.
 
+## [0.1.9] - 2026-06-16
+
+### Fixed
+
+- Unified `>` colspan syntax across all table row types — extra header rows now use `| > | A |` (placeholder **before** the spanning cell), consistent with body rows and the standard GFM header row
+- Standard GFM header row colspan is now preserved on save (previously lost due to remark-extended-table skipping i=0 during serialization)
+
 ## [0.1.1] - 2026-05-29
 
 ### Fixed
