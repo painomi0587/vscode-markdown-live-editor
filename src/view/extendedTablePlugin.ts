@@ -306,8 +306,10 @@ export const multiRowTableSchema = tableSchema.extendSchema((prev) => (ctx) => {
 					const parts: string[] = [];
 					child.forEach((cell) => {
 						const colspan = (cell.attrs.colspan as number) ?? 1;
-						parts.push(cell.textContent);
+						// `>` appears BEFORE the spanning cell (consistent with
+						// remark-extended-table body rows and the standard GFM header).
 						for (let k = 1; k < colspan; k++) parts.push('>');
+						parts.push(cell.textContent);
 					});
 					extraLines.push(`| ${parts.join(' | ')} |`);
 				});

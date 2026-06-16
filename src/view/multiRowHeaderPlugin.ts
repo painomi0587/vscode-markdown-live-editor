@@ -7,12 +7,21 @@
  *   and re-injected as extra header rows (`tableRow` with `isExtraHeader: true`).
  *
  * SERIALIZE direction (mdast → markdown):
- *   Handled in multiRowTableSchema.toMarkdown.runner via `preTableRow` mdast
- *   nodes, which are stringified directly (no pipe escaping) with no blank line
- *   before the table (join=0 registered here in toMarkdownExtensions).
+ *   Extra header rows: handled in multiRowTableSchema.toMarkdown.runner via
+ *   `preTableRow` mdast nodes (no blank line, no pipe escaping).
+ *   Standard GFM header row: handled by a custom `table` handler registered here
+ *   that expands colspan for ALL rows (including i=0, which remark-extended-table
+ *   skips). This ensures `>` markers appear in the header row on save.
+ *
+ * `>` CONVENTION (consistent with remark-extended-table body rows):
+ *   `>` is a placeholder column that the cell immediately to its RIGHT absorbs.
+ *   Example: `| > | A | B |` → A(colspan=2), B(colspan=1).
+ *   A trailing `>` with no right cell is treated as literal text (same as
+ *   remark-extended-table's `j >= row.children.length - 1` guard).
  */
 
 import type { Paragraph, Root, Table, TableRow } from 'mdast';
+import { gfmTableToMarkdown } from 'mdast-util-gfm-table';
 
 /** Parse a single pipe-row line into raw cell strings (without leading/trailing pipes). */
 function parsePipeRow(line: string): string[] | null {
@@ -24,6 +33,8 @@ function parsePipeRow(line: string): string[] | null {
 }
 
 /** Resolve `>` colspan markers in a flat cell-value array.
+ *  `>` extends the nearest non-`>` cell to its RIGHT (same semantics as
+ *  remark-extended-table body rows). A `>` with no right cell is ignored.
  *  Returns the processed cells with `colspan` set and `>` entries removed. */
 function processColspan(
 	rawCells: string[],
@@ -31,17 +42,17 @@ function processColspan(
 	const cells = rawCells.map((v) => ({ value: v, colspan: 1 }));
 	const toDelete: number[] = [];
 
-	// `>` extends the nearest non-`>` cell to its LEFT (same semantics as remark-extended-table body rows).
-	for (let j = 0; j < cells.length; j++) {
-		if (cells[j].value === '>') {
-			for (let k = j - 1; k >= 0; k--) {
-				if (cells[k].value !== '>') {
-					cells[k].colspan += 1;
-					break;
-				}
-			}
-			toDelete.push(j);
+	// Process right-to-left so consecutive `>` markers accumulate correctly.
+	for (let j = cells.length - 1; j >= 0; j--) {
+		if (cells[j].value !== '>') continue;
+		// A trailing `>` with no right cell is treated as literal text (ignored).
+		if (j >= cells.length - 1) continue;
+		// Extend each `>` chain: add colspan to the next non-`>` cell to the right.
+		for (let k = 1; j + k < cells.length; k++) {
+			cells[j + k].colspan += 1;
+			if (cells[j + k].value !== '>') break;
 		}
+		toDelete.push(j);
 	}
 
 	for (const idx of toDelete.sort((a, b) => b - a)) {
@@ -49,6 +60,76 @@ function processColspan(
 	}
 
 	return cells;
+}
+
+// ---------------------------------------------------------------------------
+// Custom remark `table` handler for the serialize direction.
+//
+// remark-extended-table's tableHandler starts at i=1, skipping the GFM header
+// row (i=0). This handler replaces it and processes ALL rows so that colspan
+// in the standard GFM header row is also preserved as `>` markers.
+// ---------------------------------------------------------------------------
+
+type AnyNode = Record<string, unknown> & { type: string };
+type AnyRow = { children: AnyNode[] };
+type AnyTable = { children: AnyRow[]; align?: (string | null)[] };
+
+function makeColspanCell(): AnyNode {
+	return {
+		type: 'tableCell',
+		children: [{ type: 'tableCellColspan', children: [] }],
+	};
+}
+
+function makeRowspanCell(): AnyNode {
+	return {
+		type: 'tableCell',
+		children: [{ type: 'tableCellRowspan', children: [] }],
+	};
+}
+
+function customTableHandler(
+	node: AnyTable,
+	parent: unknown,
+	context: unknown,
+	safeOptions: unknown,
+): string {
+	for (let i = 0; i < node.children.length; i++) {
+		const row = node.children[i];
+		let j = 0;
+		while (j < row.children.length) {
+			const cell = row.children[j];
+			const cs = (cell.colspan as number | undefined) ?? 1;
+			const rs = (cell.rowspan as number | undefined) ?? 1;
+			let offsetCol = 0;
+			if (cs > 1) {
+				for (let k = 0; k < cs - 1; k++) {
+					row.children.splice(j, 0, makeColspanCell());
+					// Keep node.align in sync when expanding the header row (i=0).
+					if (i === 0 && node.align) node.align.splice(j, 0, null);
+					offsetCol++;
+				}
+			}
+			if (rs > 1) {
+				for (let k = 0; k < rs - 1; k++) {
+					const targetRow = node.children[i + k + 1];
+					if (targetRow) {
+						for (let l = 0; l < cs; l++) {
+							targetRow.children.splice(j + l, 0, makeRowspanCell());
+						}
+					}
+				}
+			}
+			j += 1 + offsetCol;
+		}
+	}
+	return (
+		gfmTableToMarkdown() as unknown as {
+			handlers: {
+				table: (n: AnyTable, p: unknown, c: unknown, s: unknown) => string;
+			};
+		}
+	).handlers.table(node, parent, context, safeOptions);
 }
 
 /** Count effective columns in a table row (summing colspan values). */
@@ -248,6 +329,11 @@ export function remarkMultiRowHeader(this: unknown) {
 	ext.push({
 		handlers: {
 			preTableRow: (node: { value?: string }) => node.value ?? '',
+			// Override remark-extended-table's table handler so the GFM header row
+			// (i=0) also gets `>` markers for colspan. remark-extended-table only
+			// processes i >= 1. Since remarkMultiRowHeader is registered after
+			// remarkExtendedTable, this handler takes precedence.
+			table: customTableHandler as unknown as (node: unknown) => string,
 		},
 		join: [
 			(left: { type: string }, right: { type: string }) => {
