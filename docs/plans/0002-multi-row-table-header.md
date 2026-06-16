@@ -1,6 +1,6 @@
 ---
 title: Multi-Row Table Header
-status: todo
+status: done
 trust: normal
 responsiveness: relaxed
 image_clarity: specific

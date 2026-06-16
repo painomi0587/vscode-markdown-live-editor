@@ -10,7 +10,7 @@
 | 優先度 | Phase | 計画ファイル | 状態 |
 |---|---|---|---|
 | HIGH | 1 | [0001-extended-table-bug-fixes](docs/plans/0001-extended-table-bug-fixes.md) | ✅ 完了 |
-| HIGH | 2 | [0002-multi-row-table-header](docs/plans/0002-multi-row-table-header.md) | 📋 計画済み |
+| HIGH | 2 | [0002-multi-row-table-header](docs/plans/0002-multi-row-table-header.md) | ✅ 完了 |
 
 オーナーリクエスト:
 タスクが無くなったら以下に取り組んでください
