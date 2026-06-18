@@ -2,6 +2,12 @@
 
 All notable changes to Markdown Live Editor will be documented in this file.
 
+## [0.1.10] - 2026-06-18
+
+### Fixed
+
+- Fixed `\^` and `\>` escape sequences not being normalized when saving — table cell merge markers are now written back as plain `^` and `>` instead of escaped versions
+
 ## [0.1.9] - 2026-06-16
 
 ### Fixed
