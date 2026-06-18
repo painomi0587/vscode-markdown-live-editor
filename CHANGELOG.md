@@ -2,6 +2,12 @@
 
 All notable changes to Markdown Live Editor will be documented in this file.
 
+## [0.1.11] - 2026-06-18
+
+### Fixed
+
+- Fixed crash (`Invalid content for node type table_cell`) when unmerging cells — placeholder cells now always include a paragraph node as required by the schema
+
 ## [0.1.10] - 2026-06-18
 
 ### Fixed

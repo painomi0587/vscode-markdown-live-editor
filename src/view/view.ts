@@ -749,7 +749,7 @@ document.addEventListener('unmerge-cell', (e) => {
 		const rowspan = (node.attrs.rowspan as number) || 1;
 		if (colspan <= 1 && rowspan <= 1) return;
 
-		const { table_cell, table_header } = state.schema.nodes;
+		const { table_cell, table_header, paragraph } = state.schema.nodes;
 		// Use the same cell type as the target cell when creating placeholders/splits.
 		const cellType = isHeaderCell ? table_header : table_cell;
 		const tr = state.tr;
@@ -822,7 +822,7 @@ document.addEventListener('unmerge-cell', (e) => {
 						if (cc.node.type.name === 'table_header') {
 							newAttrs.covered = false;
 						}
-						const uncovered = cc.node.type.create(newAttrs);
+						const uncovered = cc.node.type.create(newAttrs, paragraph.create());
 						tr.replaceWith(cellPos, cellPos + cc.node.nodeSize, uncovered);
 					}
 				} else {
@@ -849,11 +849,10 @@ document.addEventListener('unmerge-cell', (e) => {
 					const insertPos = tr.mapping.map(computedPos);
 
 					for (let j = colspan - 1; j >= 0; j--) {
-						const placeholderCell = cellType.create({
-							colspan: 1,
-							rowspan: 1,
-							alignment: null,
-						});
+						const placeholderCell = cellType.create(
+							{ colspan: 1, rowspan: 1, alignment: null },
+							paragraph.create(),
+						);
 						tr.insert(insertPos, placeholderCell);
 					}
 				}
@@ -868,7 +867,10 @@ document.addEventListener('unmerge-cell', (e) => {
 		const extraCells = [];
 		for (let i = 1; i < colspan; i++) {
 			extraCells.push(
-				cellType.create({ colspan: 1, rowspan: 1, alignment: null }),
+				cellType.create(
+					{ colspan: 1, rowspan: 1, alignment: null },
+					paragraph.create(),
+				),
 			);
 		}
 		tr.replaceWith(mappedPos, mappedPos + node.nodeSize, [
