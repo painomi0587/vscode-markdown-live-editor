@@ -130,6 +130,12 @@ function customTableHandler(
 					const targetRow = node.children[i + k + 1];
 					if (targetRow) {
 						for (let l = 0; l < cs; l++) {
+							// Skip if a covered placeholder (^) is already present at this
+							// position — extra_header_row cells serialize covered=true cells
+							// into the mdast, so inserting another marker would inflate the
+							// column count.
+							const existing = targetRow.children[j + l] as AnyNode | undefined;
+							if (existing?.isCovered) continue;
 							targetRow.children.splice(j + l, 0, makeRowspanCell());
 						}
 					}

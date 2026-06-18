@@ -194,6 +194,9 @@ export const extendedTableHeaderSchema = tableHeaderSchema.extendSchema(
 					) {
 						props.alignment = node.attrs.alignment;
 					}
+					if (node.attrs.covered) {
+						props.isCovered = true;
+					}
 					state
 						.openNode('tableCell', undefined, props)
 						.next(node.content)

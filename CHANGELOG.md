@@ -2,6 +2,12 @@
 
 All notable changes to Markdown Live Editor will be documented in this file.
 
+## [0.1.12] - 2026-06-18
+
+### Fixed
+
+- Fixed extra empty column appearing when a multi-row header cell uses rowspan (`^`) — the serializer was inserting a duplicate rowspan marker alongside the existing covered placeholder cell
+
 ## [0.1.11] - 2026-06-18
 
 ### Fixed
