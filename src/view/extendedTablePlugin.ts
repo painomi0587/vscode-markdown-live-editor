@@ -171,11 +171,7 @@ export const extendedTableHeaderSchema = tableHeaderSchema.extendSchema(
 					const alignment = (node.align as string) || null;
 					const covered = !!(node as unknown as { isCovered?: boolean })
 						.isCovered;
-					// colspan=0 for covered placeholder cells so prosemirror-tables'
-					// findWidth doesn't double-count the column (the extra_header_row
-					// cell's rowspan already claims it; adding the placeholder's own
-					// colspan=1 would inflate the computed table width by 1).
-					const colspan = covered ? 0 : (node.colspan as number) || 1;
+					const colspan = (node.colspan as number) || 1;
 					const rowspan = (node.rowspan as number) || 1;
 					state
 						.openNode(type, { alignment, colspan, rowspan, covered })
@@ -218,7 +214,6 @@ export const extendedTableHeaderSchema = tableHeaderSchema.extendSchema(
 
 export const extraHeaderRowSchema = $nodeSchema('extra_header_row', () => ({
 	content: '(table_header)*',
-	tableRole: 'row',
 	isolating: true,
 	parseDOM: [{ tag: 'tr[data-extra-header]' }],
 	toDOM() {

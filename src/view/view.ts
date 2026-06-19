@@ -41,6 +41,7 @@ import {
 	multiRowHeaderPlugin,
 	multiRowTableSchema,
 } from './extendedTablePlugin';
+import { extraHeaderSyncPlugin } from './extraHeaderSyncPlugin';
 import {
 	frontmatterSchema,
 	frontmatterViewPlugin,
@@ -349,6 +350,7 @@ async function createEditor(
 		.config(configureSlash)
 		.use(tableMergePlugin)
 		.use(multiRowHeaderUiPlugin)
+		.use(extraHeaderSyncPlugin)
 		.use(slashKeyboardPlugin);
 
 	await instance.create();

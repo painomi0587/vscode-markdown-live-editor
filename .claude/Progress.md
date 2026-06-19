@@ -74,7 +74,28 @@
 
 ## タスク
 
-（現在タスクなし）
+### 現在のタスク: 0004-fix-add-column-mismatched-transaction
 
-> 新しいタスク開始時は以下の構造で記録する:
-> `### 現在のタスク: <Plan 名>` → `#### サブタスクチェックリスト` → `#### 日記`（運用ルール 3.5 の4項目書式）
+#### サブタスクチェックリスト
+
+- [x] 根本原因の調査（`extendedTablePlugin.ts` の `tableRole: 'row'` + `colspan=0` の組み合わせ）
+- [x] `extraHeaderRowSchema` から `tableRole: 'row'` を削除
+- [x] covered セルの `colspan=0` → `colspan=1` に戻す（コメントも削除）
+- [x] `extraHeaderSyncPlugin.ts` 作成（appendTransaction で列数同期）
+- [x] `view.ts` にプラグイン登録
+- [x] `npm run compile && npm run test:all` 通過
+- [ ] コードレビュー対応（addf-code-review-agent 実行済み、結果待ち）
+- [ ] knowhow 記録
+- [ ] Plan 完了マーク + コミット
+
+#### 日記
+
+##### 2026-06-20 — 実装完了・コードレビュー待ち
+
+**やったこと**: `extra_header_row` の `tableRole: 'row'` 削除と `colspan=0` 解除で "mismatched transaction" を解消。`extraHeaderSyncPlugin`（appendTransaction）で列追加/削除を extra_header_row に同期する仕組みを追加。全テスト通過・ビルド通過。
+
+**今の見立て**: 実装方針は正しい。fixTables が extra_header_row を無視するため colspan=1 に戻しても膨張しない。sync plugin の位置計算は `tr.mapping.map()` で補正しているため複数 extra_header_row でも正しく動くはず。確信度 80%。
+
+**次の自分へ**: コードレビューエージェントの結果を受け取って指摘があれば対応する。その後 knowhow 記録→Plan 更新→コミット。
+
+**気になっていること**: `findChangeIndex` ヒューリスティックが、コンテンツが同じ隣接セルを持つ場合に挿入位置を誤判定する可能性がある（低頻度のエッジケース）。spanning cell（colspan>1）を持つ extra_header_row での列削除の動作も未確認。

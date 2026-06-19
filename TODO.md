@@ -11,6 +11,8 @@
 |---|---|---|---|
 | HIGH | 1 | [0001-extended-table-bug-fixes](docs/plans/0001-extended-table-bug-fixes.md) | ✅ 完了 |
 | HIGH | 2 | [0002-multi-row-table-header](docs/plans/0002-multi-row-table-header.md) | ✅ 完了 |
+| HIGH | 3 | [0003-table-formatter](docs/plans/0003-table-formatter.md) | ✅ 完了 |
+| HIGH | 4 | [0004-fix-add-column-mismatched-transaction](docs/plans/0004-fix-add-column-mismatched-transaction.md) | 🔲 未着手 |
 
 オーナーリクエスト:
 タスクが無くなったら以下に取り組んでください
