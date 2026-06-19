@@ -118,6 +118,11 @@
 					"type": "boolean",
 					"default": false,
 					"description": "Enable sync debug logs and allow copying recent host/webview sync events for troubleshooting."
+				},
+				"markdownLiveEditor.formatTableOnType": {
+					"type": "boolean",
+					"default": true,
+					"description": "Automatically format Markdown tables when typing '|'. Full-width characters are counted as width 2."
 				}
 			}
 		}
