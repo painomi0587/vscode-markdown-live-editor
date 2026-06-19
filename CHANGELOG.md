@@ -2,6 +2,12 @@
 
 All notable changes to Markdown Live Editor will be documented in this file.
 
+## [0.1.13] - 2026-06-19
+
+### Fixed
+
+- Fixed extra empty column appearing when adding vertical rowspan to multi-row table headers — `prosemirror-tables`' `findWidth` was double-counting a column because the extra-header-row cell's `rowspan` contribution and the GFM header's covered placeholder cell were both counted; covered cells now carry `colspan=0` so they don't inflate the computed table width
+
 ## [0.1.12] - 2026-06-18
 
 ### Fixed

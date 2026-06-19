@@ -169,10 +169,14 @@ export const extendedTableHeaderSchema = tableHeaderSchema.extendSchema(
 				match: (node: MarkdownNode) => isTableHeaderMarkdownNode(node),
 				runner: (state: ParserState, node: MarkdownNode, type: NodeType) => {
 					const alignment = (node.align as string) || null;
-					const colspan = (node.colspan as number) || 1;
-					const rowspan = (node.rowspan as number) || 1;
 					const covered = !!(node as unknown as { isCovered?: boolean })
 						.isCovered;
+					// colspan=0 for covered placeholder cells so prosemirror-tables'
+					// findWidth doesn't double-count the column (the extra_header_row
+					// cell's rowspan already claims it; adding the placeholder's own
+					// colspan=1 would inflate the computed table width by 1).
+					const colspan = covered ? 0 : (node.colspan as number) || 1;
+					const rowspan = (node.rowspan as number) || 1;
 					state
 						.openNode(type, { alignment, colspan, rowspan, covered })
 						.openNode(state.schema.nodes.paragraph as NodeType)
