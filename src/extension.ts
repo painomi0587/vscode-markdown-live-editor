@@ -39,6 +39,7 @@ export function activate(context: vscode.ExtensionContext) {
 			{ language: 'markdown' },
 			tableFormatter,
 			'|',
+			'\n',
 		),
 	);
 

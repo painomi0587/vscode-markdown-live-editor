@@ -29,7 +29,7 @@
 		"color": "#1e1e1e",
 		"theme": "dark"
 	},
-	"activationEvents": [],
+	"activationEvents": ["onLanguage:markdown"],
 	"main": "./dist/extension.js",
 	"browser": "./dist/web/extension.js",
 	"contributes": {

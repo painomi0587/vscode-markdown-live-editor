@@ -59,7 +59,10 @@ export class TableFormatterProvider
 		const config = vscode.workspace.getConfiguration('markdownLiveEditor');
 		if (!config.get<boolean>('formatTableOnType', true)) return [];
 
-		const tableRange = findTableRange(document, position.line);
+		// When Enter is pressed the cursor is on the new empty line; look at the line above
+		const targetLine =
+			_ch === '\n' ? Math.max(0, position.line - 1) : position.line;
+		const tableRange = findTableRange(document, targetLine);
 		if (!tableRange) return [];
 
 		const tableText = document.getText(tableRange);
