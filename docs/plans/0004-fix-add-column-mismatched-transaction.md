@@ -1,6 +1,6 @@
 ---
 title: Fix "mismatched transaction" when adding column to multi-row header table
-status: todo
+status: done
 trust: normal
 responsiveness: relaxed
 image_clarity: specific
@@ -129,7 +129,17 @@ new Plugin({
 
 | ファイル | 変更 |
 |---|---|
-| `src/view/extendedTablePlugin.ts` | `extraHeaderRowSchema` の `tableRole` 削除、covered の `colspan=1` に戻す |
-| `src/view/extraHeaderSyncPlugin.ts` | 新規: appendTransaction プラグイン |
-| `src/view/view.ts` | `extraHeaderSyncPlugin` の登録 |
-| `test/unit/` | appendTransaction プラグインのユニットテスト（純粋関数部分） |
+| `src/view/extendedTablePlugin.ts` | `extraHeaderRowSchema` の `tableRole` 削除、`coveredColspan` attr 追加（colspan=0 は維持）|
+| `src/view/extraHeaderSyncPlugin.ts` | 新規: appendTransaction プラグイン（PluginKey+metadata ガード付き）|
+| `src/view/view.ts` | `extraHeaderSyncPlugin` の登録、`buildTableLayout` の `coveredColspan` 対応 |
+| `test/unit/extendedTablePlugin.test.ts` | coveredColspan ロジックのユニットテスト追加 |
+
+## 実装と計画のギャップ
+
+当初計画では covered セルを `colspan=1` に戻す（Step 2）としていたが、実際には `colspan=0` を維持した。
+理由: `colspan=1` にすると prosemirror-tables の `findWidth()` が covered cell を二重カウントし、
+行追加（addRowAfter）時に `"No cell with offset X found"` RangeError が発生することが実装中に判明した。
+
+代わりに `coveredColspan` 属性を追加して ProseMirror モデル上の colspan（=0）と
+シリアライズ用の visual colspan（=coveredColspan）を分離した。
+詳細: `docs/knowhow/prosemirror-tables-findwidth-covered-cells.md`

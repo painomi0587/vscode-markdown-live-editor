@@ -136,17 +136,28 @@ export const extendedTableHeaderSchema = tableHeaderSchema.extendSchema(
 				colspan: { default: 1 },
 				rowspan: { default: 1 },
 				covered: { default: false },
+				// Stores the visual colspan for covered cells (colspan=0 in the
+				// ProseMirror model keeps prosemirror-tables' findWidth() from
+				// counting covered columns twice, but serialization still needs the
+				// original span width to emit the correct `>` markers).
+				coveredColspan: { default: 1 },
 			},
 			parseDOM: [
 				{
 					tag: 'th',
 					getAttrs: (dom: Node) => {
 						if (!(dom instanceof HTMLElement)) return null;
+						const covered = dom.getAttribute('data-covered') === 'true';
+						const domColspan = Number(dom.getAttribute('colspan') || 1);
+						const coveredColspan = covered
+							? Number(dom.getAttribute('data-covered-colspan') || domColspan)
+							: 1;
 						return {
 							alignment: dom.style.textAlign || null,
-							colspan: Number(dom.getAttribute('colspan') || 1),
+							colspan: covered ? 0 : domColspan,
 							rowspan: Number(dom.getAttribute('rowspan') || 1),
-							covered: dom.getAttribute('data-covered') === 'true',
+							covered,
+							coveredColspan,
 						};
 					},
 				},
@@ -161,6 +172,10 @@ export const extendedTableHeaderSchema = tableHeaderSchema.extendSchema(
 					domAttrs.rowspan = String(node.attrs.rowspan);
 				if (node.attrs.covered) {
 					domAttrs['data-covered'] = 'true';
+					if ((node.attrs.coveredColspan as number) > 1)
+						domAttrs['data-covered-colspan'] = String(
+							node.attrs.coveredColspan,
+						);
 					domAttrs.style = 'display:none;padding:0;border:none;width:0;';
 				}
 				return ['th', domAttrs, 0] as [string, Record<string, string>, number];
@@ -171,10 +186,21 @@ export const extendedTableHeaderSchema = tableHeaderSchema.extendSchema(
 					const alignment = (node.align as string) || null;
 					const covered = !!(node as unknown as { isCovered?: boolean })
 						.isCovered;
-					const colspan = (node.colspan as number) || 1;
+					const origColspan = (node.colspan as number) || 1;
+					// colspan=0 prevents prosemirror-tables' findWidth() from
+					// counting covered cells as extra columns (which would corrupt
+					// the TableMap and cause "No cell with offset X found" crashes).
+					const colspan = covered ? 0 : origColspan;
+					const coveredColspan = covered ? origColspan : 1;
 					const rowspan = (node.rowspan as number) || 1;
 					state
-						.openNode(type, { alignment, colspan, rowspan, covered })
+						.openNode(type, {
+							alignment,
+							colspan,
+							rowspan,
+							covered,
+							coveredColspan,
+						})
 						.openNode(state.schema.nodes.paragraph as NodeType)
 						.next(node.children)
 						.closeNode()
@@ -185,7 +211,11 @@ export const extendedTableHeaderSchema = tableHeaderSchema.extendSchema(
 				match: (node: ProseNode) => isTableHeaderProseNode(node),
 				runner: (state: SerializerState, node: ProseNode) => {
 					const props: JSONRecord = {
-						colspan: node.attrs.colspan,
+						// Use coveredColspan for covered cells so the remark serializer
+						// emits the correct number of `>` markers.
+						colspan: node.attrs.covered
+							? node.attrs.coveredColspan
+							: node.attrs.colspan,
 						rowspan: node.attrs.rowspan,
 					};
 					if (
@@ -307,10 +337,14 @@ export const multiRowTableSchema = tableSchema.extendSchema((prev) => (ctx) => {
 					if (child.type.name !== 'extra_header_row') return;
 					const parts: string[] = [];
 					child.forEach((cell) => {
-						const colspan = (cell.attrs.colspan as number) ?? 1;
+						// Use coveredColspan for covered cells so `>` markers are
+						// emitted correctly even when colspan=0 in the model.
+						const cs = cell.attrs.covered
+							? ((cell.attrs.coveredColspan as number) ?? 1)
+							: ((cell.attrs.colspan as number) ?? 1);
 						// `>` appears BEFORE the spanning cell (consistent with
 						// remark-extended-table body rows and the standard GFM header).
-						for (let k = 1; k < colspan; k++) parts.push('>');
+						for (let k = 1; k < cs; k++) parts.push('>');
 						parts.push(cell.textContent);
 					});
 					extraLines.push(`| ${parts.join(' | ')} |`);

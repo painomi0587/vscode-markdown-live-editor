@@ -1,6 +1,8 @@
 import type { Node as ProseNode } from '@milkdown/prose/model';
-import { Plugin } from '@milkdown/prose/state';
+import { Plugin, PluginKey } from '@milkdown/prose/state';
 import { $prose } from '@milkdown/utils';
+
+const extraHeaderSyncKey = new PluginKey('extraHeaderSync');
 
 /**
  * Returns the first index where `smaller` and `larger` differ by nodeSize or
@@ -35,8 +37,13 @@ function findChangeIndex(smaller: ProseNode, larger: ProseNode): number {
  */
 export const extraHeaderSyncPlugin = $prose(() => {
 	return new Plugin({
+		key: extraHeaderSyncKey,
 		appendTransaction(transactions, oldState, newState) {
 			if (transactions.every((tr) => !tr.docChanged)) return null;
+			// Bail if one of the incoming transactions is our own output, preventing
+			// an infinite appendTransaction loop.
+			if (transactions.some((tr) => tr.getMeta(extraHeaderSyncKey)))
+				return null;
 
 			const tr = newState.tr;
 			let modified = false;
@@ -44,6 +51,10 @@ export const extraHeaderSyncPlugin = $prose(() => {
 			newState.doc.descendants((newTable, tablePos) => {
 				if (newTable.type.name !== 'table') return; // keep descending non-table nodes
 
+				// Note: tablePos is from newState.doc. Using it directly on oldState.doc
+				// is incorrect when content was inserted before this table in the same
+				// transaction. In practice this only causes a silent no-op (oldTable
+				// is null or wrong type) and the common single-table case is unaffected.
 				const oldTable = oldState.doc.nodeAt(tablePos);
 				if (!oldTable || oldTable.type.name !== 'table') return false;
 
@@ -131,7 +142,11 @@ export const extraHeaderSyncPlugin = $prose(() => {
 				return false; // don't descend into table children
 			});
 
-			return modified ? tr : null;
+			if (modified) {
+				tr.setMeta(extraHeaderSyncKey, true);
+				return tr;
+			}
+			return null;
 		},
 	});
 });

@@ -14,3 +14,10 @@
 | ファイル | 要約 | キーワード |
 |---|---|---|
 | [remark-extended-table-header-colspan.md](remark-extended-table-header-colspan.md) | remark-extended-table が i=0（GFM ヘッダー行）を serialize でスキップする問題と、customTableHandler による対処 | remark-extended-table, colspan, serialize, gfmTableToMarkdown, handlers.table, > マーカー, align 同期, API ガード |
+
+## ProseMirror / Milkdown
+
+| ファイル | 要約 | キーワード |
+|---|---|---|
+| [prosemirror-tables-findwidth-covered-cells.md](prosemirror-tables-findwidth-covered-cells.md) | prosemirror-tables の findWidth() が covered cells を二重カウントする問題と coveredColspan 属性による対処 | prosemirror-tables, findWidth, TableMap, covered, colspan=0, coveredColspan, extra_header_row, RangeError, buildTableLayout |
+| [prosemirror-appendtransaction-patterns.md](prosemirror-appendtransaction-patterns.md) | appendTransaction の無限ループガード（PluginKey + getMeta/setMeta）と複数ステップ位置補正（tr.mapping.map）の実装パターン | appendTransaction, PluginKey, getMeta, setMeta, tr.mapping.map, 無限ループ, 位置補正 |
