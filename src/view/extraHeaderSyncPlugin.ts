@@ -26,14 +26,17 @@ function findChangeIndex(smaller: ProseNode, larger: ProseNode): number {
 }
 
 /**
- * Keeps `extra_header_row` cell counts in sync with `table_header_row` after
- * column operations (addColumnAfter, addColumnBefore, deleteColumn).
+ * Safety net: keeps `extra_header_row` in sync with `table_header_row` after
+ * column operations. Because `extra_header_row` has `tableRole:'row'`,
+ * prosemirror-tables already handles it in the common case (cell inserted or
+ * removed). This plugin only acts when the two rows diverge — e.g., after
+ * deleting a column that was inside a spanning cell's range, the covered
+ * placeholder `>` (colspan=0) becomes orphaned and must be removed here.
  *
- * Background: `extra_header_row` has no `tableRole:'row'`, so prosemirror-tables'
- * TableMap ignores it and column commands do not update it automatically.
- *
- * Known limitation: `extra_header_row` cells with `colspan > 1` are not handled.
- * The cell count will be corrected but the column alignment may be off.
+ * Guard: if `extra_header_row`'s total colspan sum already matches the new
+ * header count (meaning prosemirror-tables handled it by extending a spanning
+ * cell's colspan rather than inserting a new cell), this plugin skips to avoid
+ * double-modification.
  */
 export const extraHeaderSyncPlugin = $prose(() => {
 	return new Plugin({
@@ -83,6 +86,19 @@ export const extraHeaderSyncPlugin = $prose(() => {
 					const extraDiff =
 						(newHeaderRow as ProseNode).childCount - extraRow.childCount;
 					if (extraDiff === 0) continue;
+
+					// If prosemirror-tables handled this row by extending a spanning
+					// cell's colspan (instead of inserting/removing a cell), the colspan
+					// sum already reflects the new column count — skip to avoid a
+					// spurious extra cell insertion.
+					if (extraDiff > 0) {
+						let extraColspanTotal = 0;
+						extraRow.forEach((cell: ProseNode) => {
+							extraColspanTotal += (cell.attrs.colspan as number) || 0;
+						});
+						if (extraColspanTotal >= (newHeaderRow as ProseNode).childCount)
+							continue;
+					}
 
 					// rawRowPos is the doc position of the extra_header_row in newState.doc.
 					// tr.mapping.map() compensates for any earlier steps in this appendTransaction.
