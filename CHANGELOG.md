@@ -2,6 +2,26 @@
 
 All notable changes to Markdown Live Editor will be documented in this file.
 
+## [1.0.0] - 2026-06-20
+
+### Added
+
+- Multi-row table header support — tables can now have multiple header rows using `^` rowspan syntax
+- Table auto-formatting — Markdown tables are automatically aligned when typing `|`; full-width characters counted as width 2 (`markdownLiveEditor.formatTableOnType` setting)
+
+### Fixed
+
+- Fixed TableMap corruption when adding rows or columns to multi-row header tables
+- Fixed mismatched transaction when adding a column to a multi-row header table
+- Fixed `tableRole:'row'` being stripped from `extra_header_row`, which caused column operations to silently no-op
+- Fixed extra empty column appearing when using vertical rowspan in multi-row headers
+- Fixed duplicate rowspan marker insertion alongside existing covered placeholder cells
+
+### Changed
+
+- First stable release — all core extended table features implemented and tested
+- Cleaned up README with complete feature list
+
 ## [0.1.13] - 2026-06-19
 
 ### Fixed
