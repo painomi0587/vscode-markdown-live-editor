@@ -2,7 +2,7 @@
 	"name": "markdown-live-editor-plus",
 	"displayName": "Markdown Live Editor Plus",
 	"description": "WYSIWYG Markdown editor for VS Code with extended table support (colspan/rowspan)",
-	"version": "0.1.13",
+	"version": "1.0.0",
 	"publisher": "painomi0587",
 	"repository": {
 		"type": "git",
@@ -29,7 +29,7 @@
 		"color": "#1e1e1e",
 		"theme": "dark"
 	},
-	"activationEvents": [],
+	"activationEvents": ["onLanguage:markdown"],
 	"main": "./dist/extension.js",
 	"browser": "./dist/web/extension.js",
 	"contributes": {
@@ -118,6 +118,11 @@
 					"type": "boolean",
 					"default": false,
 					"description": "Enable sync debug logs and allow copying recent host/webview sync events for troubleshooting."
+				},
+				"markdownLiveEditor.formatTableOnType": {
+					"type": "boolean",
+					"default": true,
+					"description": "Automatically format Markdown tables when typing '|'. Full-width characters are counted as width 2."
 				}
 			}
 		}

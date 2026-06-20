@@ -41,6 +41,7 @@ import {
 	multiRowHeaderPlugin,
 	multiRowTableSchema,
 } from './extendedTablePlugin';
+import { extraHeaderSyncPlugin } from './extraHeaderSyncPlugin';
 import {
 	frontmatterSchema,
 	frontmatterViewPlugin,
@@ -349,6 +350,7 @@ async function createEditor(
 		.config(configureSlash)
 		.use(tableMergePlugin)
 		.use(multiRowHeaderUiPlugin)
+		.use(extraHeaderSyncPlugin)
 		.use(slashKeyboardPlugin);
 
 	await instance.create();
@@ -422,7 +424,12 @@ function buildTableLayout(table: ProseMirrorNode, tableStart: number) {
 				col += 1;
 			}
 			const startColumn = col;
-			const colspan = (cell.attrs.colspan as number) || 1;
+			// Covered cells store colspan=0 in the PM model so prosemirror-tables'
+			// findWidth() doesn't double-count them. Use coveredColspan for the
+			// visual column advance so subsequent cells get the correct startColumn.
+			const colspan = cell.attrs.covered
+				? (cell.attrs.coveredColspan as number) || 1
+				: (cell.attrs.colspan as number) || 1;
 			const rowspan = (cell.attrs.rowspan as number) || 1;
 			cells.push({
 				node: cell,

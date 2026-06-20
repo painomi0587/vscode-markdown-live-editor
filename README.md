@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-A WYSIWYG Markdown editor for Visual Studio Code with extended table support.
+A WYSIWYG Markdown editor for Visual Studio Code with extended table support including colspan, rowspan, and multi-row headers.
 Fork of [Markdown Live Editor](https://github.com/ishiij-dev/vscode-markdown-live-editor) by ishiij-dev.
 
 ## Installation
@@ -13,17 +13,14 @@ Launch VS Code Quick Open (`Ctrl+P`), paste the following command, and press ent
 ext install painomi0587.markdown-live-editor-plus
 ```
 
-## Additional Features (vs original)
-
-- **Extended table syntax** — Colspan (`>`) and rowspan (`^`) support
-- **Cell unmerge** — Click ⊠ on a merged cell to unmerge it
-
 ## Features
 
 - **WYSIWYG editing** — Edit Markdown visually with [Milkdown](https://milkdown.dev/) (ProseMirror-based)
 - **Bidirectional sync** — Changes in the visual editor update the source file, and vice versa
 - **GFM support** — Tables, task lists, strikethrough, footnotes
-- **Extended table syntax** — `>` for colspan, `^` for rowspan
+- **Extended table syntax** — `>` for colspan, `^` for rowspan, multi-row headers
+- **Cell merge/unmerge** — Merge cells via `>` / `^` syntax; click ⊠ to unmerge
+- **Table auto-formatting** — Tables are aligned automatically when typing `|` (full-width character aware)
 - **Selection toolbar** — Select text to show Bold, Italic, Strikethrough, Code, and Link buttons
 - **Link tooltip** — Hover over links to preview URL with edit/delete actions
 - **In-editor Find** — Search inside the webview editor with match highlights and keyboard navigation

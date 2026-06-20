@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { MarkdownEditorProvider } from './provider/markdownEditorProvider';
 import { OutlineProvider } from './provider/outlineProvider';
+import { TableFormatterProvider } from './provider/tableFormatterProvider';
 
 export function activate(context: vscode.ExtensionContext) {
 	const outlineProvider = new OutlineProvider();
@@ -23,6 +24,22 @@ export function activate(context: vscode.ExtensionContext) {
 			context,
 			outlineProvider,
 			wordCountStatusBar,
+		),
+	);
+
+	const tableFormatter = new TableFormatterProvider();
+	context.subscriptions.push(
+		vscode.languages.registerDocumentFormattingEditProvider(
+			{ language: 'markdown' },
+			tableFormatter,
+		),
+	);
+	context.subscriptions.push(
+		vscode.languages.registerOnTypeFormattingEditProvider(
+			{ language: 'markdown' },
+			tableFormatter,
+			'|',
+			'\n',
 		),
 	);
 
