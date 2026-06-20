@@ -244,6 +244,7 @@ export const extendedTableHeaderSchema = tableHeaderSchema.extendSchema(
 
 export const extraHeaderRowSchema = $nodeSchema('extra_header_row', () => ({
 	content: '(table_header)*',
+	tableRole: 'row',
 	isolating: true,
 	parseDOM: [{ tag: 'tr[data-extra-header]' }],
 	toDOM() {
