@@ -119,6 +119,37 @@ describe('formatTableBlock', () => {
 		// col width = max(1 for 'A', 1 for 'x', 3 for separator) = 3
 		assert.deepEqual(result, ['| A   |', '| --- |', '| x   |']);
 	});
+
+	it('does not treat a hyphen data cell as a separator', () => {
+		const input = [
+			'| Name | Value |',
+			'| --- | --- |',
+			'| item | - |',
+		];
+		const result = formatTableBlock(input);
+		// '-' in data row must stay as '-', not expand to '---'
+		assert.deepEqual(result, [
+			'| Name | Value |',
+			'| ---- | ----- |',
+			'| item | -     |',
+		]);
+	});
+
+	it('treats a row as separator only when all cells match separator pattern', () => {
+		const input = [
+			'| A | B |',
+			'| - | - |',
+			'| - | x |',
+		];
+		const result = formatTableBlock(input);
+		// Row 1: all cells are '-' → separator row
+		// Row 2: second cell is 'x' → NOT a separator row, '-' stays as data
+		assert.deepEqual(result, [
+			'| A   | B   |',
+			'| --- | --- |',
+			'| -   | x   |',
+		]);
+	});
 });
 
 describe('formatMarkdownTables', () => {
