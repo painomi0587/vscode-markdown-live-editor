@@ -35,6 +35,10 @@ function isSeparatorCell(cell: string): boolean {
 	return /^:?-+:?$/.test(cell);
 }
 
+function isSeparatorRow(row: string[]): boolean {
+	return row.length > 0 && row.every((cell) => isSeparatorCell(cell));
+}
+
 type Alignment = 'left' | 'right' | 'center' | 'none';
 
 function getSeparatorAlignment(cell: string): Alignment {
@@ -84,9 +88,11 @@ export function formatTableBlock(lines: string[]): string[] {
 		while (row.length < colCount) row.push('');
 	}
 
-	const separatorAligns: Alignment[][] = parsedRows.map((row) =>
+	const separatorRowFlags: boolean[] = parsedRows.map(isSeparatorRow);
+
+	const separatorAligns: Alignment[][] = parsedRows.map((row, ri) =>
 		row.map((cell) =>
-			isSeparatorCell(cell) ? getSeparatorAlignment(cell) : 'none',
+			separatorRowFlags[ri] ? getSeparatorAlignment(cell) : 'none',
 		),
 	);
 
@@ -94,7 +100,7 @@ export function formatTableBlock(lines: string[]): string[] {
 	for (let ri = 0; ri < parsedRows.length; ri++) {
 		for (let ci = 0; ci < parsedRows[ri].length; ci++) {
 			const cell = parsedRows[ri][ci];
-			const w = isSeparatorCell(cell) ? 3 : getDisplayWidth(cell);
+			const w = separatorRowFlags[ri] ? 3 : getDisplayWidth(cell);
 			if (w > colWidths[ci]) colWidths[ci] = w;
 		}
 	}
@@ -102,7 +108,7 @@ export function formatTableBlock(lines: string[]): string[] {
 	return parsedRows.map((row, ri) => {
 		const cells = row.map((cell, ci) => {
 			const width = colWidths[ci];
-			if (isSeparatorCell(cell)) {
+			if (separatorRowFlags[ri]) {
 				return formatSeparatorCell(width, separatorAligns[ri][ci]);
 			}
 			const pad = width - getDisplayWidth(cell);
