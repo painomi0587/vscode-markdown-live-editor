@@ -2,7 +2,7 @@
 	"name": "markdown-live-editor-plus",
 	"displayName": "Markdown Live Editor Plus",
 	"description": "WYSIWYG Markdown editor for VS Code with extended table support (colspan/rowspan)",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"publisher": "painomi0587",
 	"repository": {
 		"type": "git",

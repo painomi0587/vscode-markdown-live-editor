@@ -2,6 +2,12 @@
 
 All notable changes to Markdown Live Editor will be documented in this file.
 
+## [1.0.1] - 2026-06-22
+
+### Fixed
+
+- Fixed table formatter incorrectly expanding a lone `-` in a data cell into `---` (separator dashes) — separator detection is now row-level: a row is treated as a separator only when all its cells match the separator pattern
+
 ## [1.0.0] - 2026-06-20
 
 ### Added
