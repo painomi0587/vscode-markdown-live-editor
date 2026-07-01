@@ -54,6 +54,13 @@ export const extendedTableCellSchema = tableCellSchema.extendSchema(
 			...prevSchema,
 			attrs: {
 				...prevSchema.attrs,
+				// The base gfm schema defaults `alignment` to "left". That default
+				// bites when prosemirror-tables' addColumn creates a new cell via
+				// createAndFill() without an explicit alignment: the fresh column
+				// would serialize as `:---` (left) instead of `---` (unset). Parsed
+				// cells always carry an explicit alignment (null when unset), so
+				// overriding the default to null only affects newly inserted cells.
+				alignment: { default: null },
 				colspan: { default: 1 },
 				rowspan: { default: 1 },
 			},
@@ -133,6 +140,9 @@ export const extendedTableHeaderSchema = tableHeaderSchema.extendSchema(
 			...prevSchema,
 			attrs: {
 				...prevSchema.attrs,
+				// See the note on extendedTableCellSchema: override the base "left"
+				// default so newly inserted header cells serialize as `---`, not `:---`.
+				alignment: { default: null },
 				colspan: { default: 1 },
 				rowspan: { default: 1 },
 				covered: { default: false },

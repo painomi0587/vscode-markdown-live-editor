@@ -2,6 +2,12 @@
 
 All notable changes to Markdown Live Editor will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+- Fixed a spurious left-alignment (`:---`) being written into a newly inserted table column — the base editor schema defaulted a cell's `alignment` to `"left"`, so columns created by "add column" round-tripped as left-aligned instead of unaligned (`---`). Affected every table, and was especially visible when editing tables with merged (colspan/rowspan) cells. Explicit alignments set by the user are still preserved.
+
 ## [1.0.1] - 2026-06-22
 
 ### Fixed
