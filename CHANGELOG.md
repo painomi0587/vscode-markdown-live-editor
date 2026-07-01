@@ -2,6 +2,12 @@
 
 All notable changes to Markdown Live Editor will be documented in this file.
 
+## [1.0.3] - 2026-07-01
+
+### Changed
+
+- Refactored the webview editor entry point (`view.ts`, 930 lines) by splitting table-layout computation, heading/word-count extraction, HTML export/sanitization, table cell transaction logic, and sync debug logging into focused modules. No behavior change; added unit test coverage for the newly extracted pure logic.
+
 ## [1.0.2] - 2026-07-01
 
 ### Fixed
