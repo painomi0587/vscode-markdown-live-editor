@@ -23,6 +23,23 @@ describe('isHostToEditorMessage', () => {
 		);
 		assert.equal(isHostToEditorMessage({ type: 'requestHeadings' }), true);
 		assert.equal(
+			isHostToEditorMessage({
+				type: 'imageSaved',
+				requestId: 'img-1',
+				src: 'images/a.png',
+				alt: 'a',
+			}),
+			true,
+		);
+		assert.equal(
+			isHostToEditorMessage({
+				type: 'imageSaveFailed',
+				requestId: 'img-1',
+				error: 'nope',
+			}),
+			true,
+		);
+		assert.equal(
 			isHostToEditorMessage({ type: 'setSyncDebugLogs', enabled: true }),
 			true,
 		);
@@ -76,6 +93,26 @@ describe('isEditorToHostMessage', () => {
 			}),
 			true,
 		);
+		assert.equal(
+			isEditorToHostMessage({
+				type: 'saveImage',
+				requestId: 'img-1',
+				data: 'AAAA',
+				mimeType: 'image/png',
+				name: null,
+			}),
+			true,
+		);
+		assert.equal(
+			isEditorToHostMessage({
+				type: 'saveImage',
+				requestId: 'img-1',
+				data: 'AAAA',
+				mimeType: 'image/png',
+				name: 'photo.png',
+			}),
+			true,
+		);
 	});
 
 	it('rejects invalid editor messages', () => {
@@ -92,6 +129,16 @@ describe('isEditorToHostMessage', () => {
 				words: 10,
 				characters: 42,
 				selection: { words: '2', characters: 8 },
+			}),
+			false,
+		);
+		assert.equal(
+			isEditorToHostMessage({
+				type: 'saveImage',
+				requestId: 'img-1',
+				data: 'AAAA',
+				mimeType: 'image/png',
+				name: 42,
 			}),
 			false,
 		);

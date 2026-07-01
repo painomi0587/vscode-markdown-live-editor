@@ -123,6 +123,11 @@
 					"type": "boolean",
 					"default": true,
 					"description": "Automatically format Markdown tables when typing '|'. Full-width characters are counted as width 2."
+				},
+				"markdownLiveEditor.imageSaveDir": {
+					"type": "string",
+					"default": "images",
+					"description": "Directory (relative to the Markdown file) where pasted or dropped images are saved. Leave empty to save next to the document."
 				}
 			}
 		}

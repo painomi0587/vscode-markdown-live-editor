@@ -33,6 +33,7 @@ ext install painomi0587.markdown-live-editor-plus
 - **Slash commands** — Type `/` to insert headings, lists, tables, code blocks, math, mermaid diagrams, and more
 - **Emoji shortcodes** — `:smile:` → 😄, `:rocket:` → 🚀
 - **Relative image paths** — Display local images referenced with relative paths
+- **Image paste & drop** — Paste from the clipboard or drop image files to save them next to the document (configurable folder) and insert a relative-path link
 - **Custom CSS** — Inject your own styles via settings
 - **Theme integration** — Adapts to light, dark, and high-contrast themes
 
