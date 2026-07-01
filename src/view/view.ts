@@ -58,6 +58,7 @@ import {
 	remarkMathPlugin,
 } from './katexPlugin';
 import { multiRowHeaderUiPlugin } from './multiRowHeaderUiPlugin';
+import { pasteTablePlugin } from './pasteTablePlugin';
 import { mountSearchPanel } from './searchPanel';
 import { searchPlugin } from './searchPlugin';
 import { configureSlash, slash, slashKeyboardPlugin } from './slashPlugin';
@@ -295,6 +296,7 @@ async function createEditor(
 		.use(slash)
 		.config(configureSlash)
 		.use(tableMergePlugin)
+		.use(pasteTablePlugin)
 		.use(multiRowHeaderUiPlugin)
 		.use(extraHeaderSyncPlugin)
 		.use(slashKeyboardPlugin);
