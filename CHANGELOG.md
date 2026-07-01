@@ -2,7 +2,7 @@
 
 All notable changes to Markdown Live Editor will be documented in this file.
 
-## [Unreleased]
+## [1.0.2] - 2026-07-01
 
 ### Fixed
 
