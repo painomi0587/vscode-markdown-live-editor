@@ -14,8 +14,10 @@
 	},
 	"include": [
 		"src/view/editorTestUtils.ts",
+		"src/view/exportHtml.ts",
 		"src/view/extendedTableMatchers.ts",
 		"src/view/multiRowHeaderPlugin.ts",
+		"src/view/syncDebugLog.ts",
 		"test/unit/**/*.ts",
 		"test/smoke/**/*.ts"
 	]

@@ -22,6 +22,7 @@ import { hashText } from '../shared/hash';
 import { alertPlugin } from './alertPlugin';
 import { autoPairPlugin } from './autoPairPlugin';
 import { codeBlockPlugin, highlightPlugin } from './codeBlockPlugin';
+import { calculateWordCount, extractHeadings } from './docStats';
 import {
 	cleanupTableBr,
 	cleanupTableEscapes,
@@ -31,6 +32,7 @@ import {
 	type WordCountData,
 } from './editorTestUtils';
 import { emojiPlugin } from './emojiPlugin';
+import { buildExportHtml } from './exportHtml';
 import {
 	extendedTableCellSchema,
 	extendedTableHeaderRowSchema,
@@ -59,7 +61,13 @@ import { multiRowHeaderUiPlugin } from './multiRowHeaderUiPlugin';
 import { mountSearchPanel } from './searchPanel';
 import { searchPlugin } from './searchPlugin';
 import { configureSlash, slash, slashKeyboardPlugin } from './slashPlugin';
+import { createSyncDebugLogger } from './syncDebugLog';
 import { configureTableBlock, tableBlock } from './tableBlockPlugin';
+import {
+	addExtraHeaderRowAt,
+	removeExtraHeaderRowAt,
+	unmergeCellAt,
+} from './tableCellCommands';
 import { tableMergePlugin } from './tableMergePlugin';
 import {
 	configureCustomLinkTooltip,
@@ -96,7 +104,6 @@ window.addEventListener('unhandledrejection', (e) => {
 let editor: Editor | null = null;
 let isUpdatingFromExtension = false;
 let pendingRemoteMarkdown: string | null = null;
-let syncDebugSeq = 0;
 
 // We compare against the normalized baseline to detect real user changes.
 // This prevents the file from being dirtied just by opening it in the editor.
@@ -108,45 +115,12 @@ let isInitializing = false;
 let updateTimer: ReturnType<typeof setTimeout> | null = null;
 const UPDATE_DELAY_MS = 300;
 let disposeSearchUi: (() => void) | null = null;
-const SYNC_DEBUG_STORAGE_KEY = 'markdownLiveEditor.syncDebug';
 let visualLineNumbersEnabled = false;
-let syncDebugLogsEnabled = false;
 
-function setSyncDebugLogsEnabled(enabled: boolean): void {
-	syncDebugLogsEnabled = enabled;
-	try {
-		window.localStorage.setItem(SYNC_DEBUG_STORAGE_KEY, enabled ? '1' : '0');
-	} catch {
-		// Ignore localStorage failures in constrained webview environments.
-	}
-}
-
-function isSyncDebugEnabled(): boolean {
-	if (syncDebugLogsEnabled) return true;
-	try {
-		return window.localStorage.getItem(SYNC_DEBUG_STORAGE_KEY) === '1';
-	} catch {
-		return false;
-	}
-}
-
-function syncDebug(event: string, payload: Record<string, unknown> = {}): void {
-	if (!isSyncDebugEnabled()) return;
-	syncDebugSeq += 1;
-	const ts = Date.now();
-	console.debug(`[MLE:view:${syncDebugSeq}] ${event}`, {
-		ts,
-		...payload,
-	});
-	vscode.postMessage({
-		type: 'syncDebugLog',
-		source: 'view',
-		event,
-		seq: syncDebugSeq,
-		ts,
-		payload,
-	});
-}
+const syncDebugLogger = createSyncDebugLogger((message) =>
+	vscode.postMessage(message),
+);
+const syncDebug = syncDebugLogger.log;
 
 // ProseMirror plugin that detects doc changes and syncs to the extension host.
 // Unlike Milkdown's markdownUpdated listener, this does NOT serialize the
@@ -189,22 +163,6 @@ const syncPlugin = $prose((ctx) => {
 // for the outline panel (TreeView).
 // -------------------------------------------------------
 
-function extractHeadings(doc: ProseMirrorNode): HeadingData[] {
-	const headings: HeadingData[] = [];
-	doc.descendants((node, pos) => {
-		if (node.type.name === 'heading') {
-			const text = node.textContent.trim();
-			if (!text) return;
-			headings.push({
-				text,
-				level: node.attrs.level as number,
-				pos,
-			});
-		}
-	});
-	return headings;
-}
-
 let lastHeadings: HeadingData[] = [];
 
 function sendHeadings(doc: ProseMirrorNode): void {
@@ -232,18 +190,6 @@ const headingExtractPlugin = $prose((_ctx) => {
 // Word count — sends word/character counts to the extension
 // host for the status bar display.
 // -------------------------------------------------------
-
-function calculateWordCount(doc: ProseMirrorNode): WordCountData {
-	let text = '';
-	doc.descendants((node) => {
-		if (node.isText) {
-			text += node.text;
-		} else if (node.isBlock && text.length > 0) {
-			text += '\n';
-		}
-	});
-	return countText(text);
-}
 
 let lastWordCount: WordCountData = { words: 0, characters: 0 };
 let lastSelectionCount: WordCountData | null = null;
@@ -390,80 +336,6 @@ async function createEditor(
 	return instance;
 }
 
-function buildTableLayout(table: ProseMirrorNode, tableStart: number) {
-	type CellInfo = {
-		node: ProseMirrorNode;
-		pos: number;
-		startColumn: number;
-		colspan: number;
-		rowspan: number;
-	};
-
-	const rows: Array<{
-		row: ProseMirrorNode;
-		rowPos: number;
-		cells: CellInfo[];
-	}> = [];
-	const rowSpanCounts: number[] = [];
-
-	table.forEach((row, rowOffset) => {
-		// Include all row types so ⊠ unmerge works for cells in any row
-		// (table_row, table_header_row, extra_header_row).
-		if (
-			row.type.name !== 'table_row' &&
-			row.type.name !== 'table_header_row' &&
-			row.type.name !== 'extra_header_row'
-		)
-			return;
-		const rowPos = tableStart + 1 + rowOffset;
-		const cells: CellInfo[] = [];
-		let col = 0;
-
-		row.forEach((cell, cellOffset) => {
-			while (rowSpanCounts[col] > 0) {
-				col += 1;
-			}
-			const startColumn = col;
-			// Covered cells store colspan=0 in the PM model so prosemirror-tables'
-			// findWidth() doesn't double-count them. Use coveredColspan for the
-			// visual column advance so subsequent cells get the correct startColumn.
-			const colspan = cell.attrs.covered
-				? (cell.attrs.coveredColspan as number) || 1
-				: (cell.attrs.colspan as number) || 1;
-			const rowspan = (cell.attrs.rowspan as number) || 1;
-			cells.push({
-				node: cell,
-				pos: rowPos + 1 + cellOffset,
-				startColumn,
-				colspan,
-				rowspan,
-			});
-
-			for (let i = 0; i < colspan; i++) {
-				const index = startColumn + i;
-				if (rowspan > 1) {
-					rowSpanCounts[index] = Math.max(
-						rowSpanCounts[index] || 0,
-						rowspan - 1,
-					);
-				} else if (rowSpanCounts[index] === undefined) {
-					rowSpanCounts[index] = 0;
-				}
-			}
-			col += colspan;
-		});
-
-		rows.push({ row, rowPos, cells });
-		for (let i = 0; i < rowSpanCounts.length; i++) {
-			if (rowSpanCounts[i] > 0) {
-				rowSpanCounts[i] -= 1;
-			}
-		}
-	});
-
-	return rows;
-}
-
 function replaceContent(newMarkdown: string): void {
 	if (!editor) {
 		pendingRemoteMarkdown = newMarkdown;
@@ -548,91 +420,6 @@ function maybeApplyPendingRemoteUpdate(): void {
 	replaceContent(queued);
 }
 
-function buildExportHtml(style: string, customStyle: string): string {
-	const exportDoc = document.implementation.createHTMLDocument(
-		'Markdown Live Editor Export',
-	);
-	const metaCharset = exportDoc.createElement('meta');
-	metaCharset.setAttribute('charset', 'UTF-8');
-	exportDoc.head.appendChild(metaCharset);
-
-	const metaViewport = exportDoc.createElement('meta');
-	metaViewport.name = 'viewport';
-	metaViewport.content = 'width=device-width, initial-scale=1.0';
-	exportDoc.head.appendChild(metaViewport);
-
-	const titleElement = exportDoc.createElement('title');
-	titleElement.textContent = 'Markdown Live Editor Export';
-	exportDoc.head.appendChild(titleElement);
-
-	if (style) {
-		const styleElement = exportDoc.createElement('style');
-		styleElement.textContent = style;
-		exportDoc.head.appendChild(styleElement);
-	}
-
-	if (customStyle) {
-		const customStyleElement = exportDoc.createElement('style');
-		customStyleElement.textContent = customStyle;
-		exportDoc.head.appendChild(customStyleElement);
-	}
-
-	const editorElement = document.getElementById('editor');
-	const wrapper = exportDoc.createElement('div');
-	wrapper.className = 'markdown-live-export';
-	wrapper.innerHTML = editorElement?.innerHTML ?? '';
-	sanitizeExportContainer(wrapper);
-	exportDoc.body.appendChild(wrapper);
-
-	return `<!DOCTYPE html>\n${exportDoc.documentElement.outerHTML}`;
-}
-
-function sanitizeExportContainer(root: HTMLElement): void {
-	// Strip executable elements from exported snapshots.
-	root
-		.querySelectorAll(
-			'script, iframe, object, embed, link[rel="import"], base, meta[http-equiv="refresh"]',
-		)
-		.forEach((node) => {
-			node.remove();
-		});
-
-	root.querySelectorAll('*').forEach((element) => {
-		for (const attribute of Array.from(element.attributes)) {
-			const attrName = attribute.name.toLowerCase();
-			const attrValue = attribute.value;
-
-			if (attrName.startsWith('on')) {
-				element.removeAttribute(attribute.name);
-				continue;
-			}
-
-			if (attrName === 'srcdoc') {
-				element.removeAttribute(attribute.name);
-				continue;
-			}
-
-			if (isJavascriptUrlAttribute(attrName, attrValue)) {
-				element.removeAttribute(attribute.name);
-			}
-		}
-	});
-}
-
-function isJavascriptUrlAttribute(name: string, value: string): boolean {
-	if (
-		name !== 'href' &&
-		name !== 'src' &&
-		name !== 'xlink:href' &&
-		name !== 'formaction'
-	) {
-		return false;
-	}
-
-	const normalized = value.toLowerCase().replace(/\s+/g, '');
-	return normalized.startsWith('javascript:');
-}
-
 // Handle messages from the extension host
 window.addEventListener('message', (event) => {
 	const rawMessage = event.data;
@@ -649,7 +436,7 @@ window.addEventListener('message', (event) => {
 			if (message.documentDirUri) {
 				setDocumentDirUri(message.documentDirUri);
 			}
-			setSyncDebugLogsEnabled(message.syncDebugLogs);
+			syncDebugLogger.setEnabled(message.syncDebugLogs);
 			visualLineNumbersEnabled = message.visualLineNumbers;
 			visualLineNumbersController.updateEnabled(visualLineNumbersEnabled);
 			createEditor(container, message.body)
@@ -731,7 +518,7 @@ window.addEventListener('message', (event) => {
 			break;
 		}
 		case 'setSyncDebugLogs': {
-			setSyncDebugLogsEnabled(message.enabled);
+			syncDebugLogger.setEnabled(message.enabled);
 			break;
 		}
 	}
@@ -746,146 +533,7 @@ document.addEventListener('unmerge-cell', (e) => {
 	const { pos } = (e as CustomEvent).detail as { pos: number };
 	if (!editor) return;
 	editor.action((ctx) => {
-		const view = ctx.get(editorViewCtx);
-		const state = view.state;
-		const node = state.doc.nodeAt(pos);
-		const isHeaderCell = node?.type.name === 'table_header';
-		if (!node || (node.type.name !== 'table_cell' && !isHeaderCell)) return;
-
-		const colspan = (node.attrs.colspan as number) || 1;
-		const rowspan = (node.attrs.rowspan as number) || 1;
-		if (colspan <= 1 && rowspan <= 1) return;
-
-		const { table_cell, table_header, paragraph } = state.schema.nodes;
-		// Use the same cell type as the target cell when creating placeholders/splits.
-		const cellType = isHeaderCell ? table_header : table_cell;
-		const tr = state.tr;
-
-		let targetTableNode: ProseMirrorNode | null = null;
-		let targetTablePos = -1;
-		state.doc.descendants((n, p) => {
-			if (n.type.name !== 'table') return;
-			if (p < pos && pos < p + n.nodeSize) {
-				targetTableNode = n;
-				targetTablePos = p;
-			}
-		});
-		if (!targetTableNode) return;
-
-		const rows = buildTableLayout(targetTableNode, targetTablePos);
-		let targetRowIndex = -1;
-		let targetCellInfo: {
-			node: ProseMirrorNode;
-			pos: number;
-			startColumn: number;
-			colspan: number;
-			rowspan: number;
-		} | null = null;
-
-		for (let i = 0; i < rows.length; i++) {
-			const rowInfo = rows[i];
-			for (const cellInfo of rowInfo.cells) {
-				if (cellInfo.pos === pos) {
-					targetRowIndex = i;
-					targetCellInfo = cellInfo;
-					break;
-				}
-			}
-			if (targetCellInfo) break;
-		}
-		if (!targetCellInfo) return;
-
-		if (rowspan > 1) {
-			for (let i = targetRowIndex + 1; i < targetRowIndex + rowspan; i++) {
-				if (i >= rows.length) continue;
-				const rowInfo = rows[i];
-
-				const targetColumn = targetCellInfo.startColumn;
-
-				// Replace existing placeholder cells rather than inserting new ones.
-				// Two kinds of placeholder occupy the spanned columns:
-				//   1. table_header cells with covered=true (multi-row header rows)
-				//   2. table_cell cells whose text is "^" (remark-extended-table body rows)
-				// Inserting alongside either kind inflates the column count and breaks
-				// round-trip serialization, so we replace them in-place instead.
-				const coveredInRange = rowInfo.cells.filter(
-					(cell) =>
-						cell.startColumn >= targetColumn &&
-						cell.startColumn < targetColumn + colspan &&
-						((cell.node.attrs.covered as boolean) ||
-							cell.node.textContent === '^'),
-				);
-
-				if (coveredInRange.length > 0) {
-					// Process in reverse order so later positions shift first.
-					for (let k = coveredInRange.length - 1; k >= 0; k--) {
-						const cc = coveredInRange[k];
-						const cellPos = tr.mapping.map(cc.pos);
-						const newAttrs: Record<string, unknown> = {
-							colspan: 1,
-							rowspan: 1,
-							alignment: null,
-						};
-						if (cc.node.type.name === 'table_header') {
-							newAttrs.covered = false;
-						}
-						const uncovered = cc.node.type.create(newAttrs, paragraph.create());
-						tr.replaceWith(cellPos, cellPos + cc.node.nodeSize, uncovered);
-					}
-				} else {
-					let computedPos = rowInfo.rowPos + rowInfo.row.nodeSize - 1;
-
-					const beforeCell = rowInfo.cells.find(
-						(cell) => cell.startColumn >= targetColumn,
-					);
-					const previousCell = [...rowInfo.cells]
-						.filter((cell) => cell.startColumn < targetColumn)
-						.pop();
-
-					if (beforeCell) {
-						computedPos = beforeCell.pos;
-					} else if (
-						previousCell &&
-						previousCell.startColumn + previousCell.colspan > targetColumn
-					) {
-						computedPos = previousCell.pos + previousCell.node.nodeSize;
-					}
-
-					// Map through preceding insertions so position stays correct
-					// when multiple rows need placeholder cells (rowspan > 2).
-					const insertPos = tr.mapping.map(computedPos);
-
-					for (let j = colspan - 1; j >= 0; j--) {
-						const placeholderCell = cellType.create(
-							{ colspan: 1, rowspan: 1, alignment: null },
-							paragraph.create(),
-						);
-						tr.insert(insertPos, placeholderCell);
-					}
-				}
-			}
-		}
-
-		const mappedPos = tr.mapping.map(pos);
-		const emptyCell = cellType.create(
-			{ colspan: 1, rowspan: 1, alignment: node.attrs.alignment },
-			node.content,
-		);
-		const extraCells = [];
-		for (let i = 1; i < colspan; i++) {
-			extraCells.push(
-				cellType.create(
-					{ colspan: 1, rowspan: 1, alignment: null },
-					paragraph.create(),
-				),
-			);
-		}
-		tr.replaceWith(mappedPos, mappedPos + node.nodeSize, [
-			emptyCell,
-			...extraCells,
-		]);
-
-		view.dispatch(tr);
+		unmergeCellAt(ctx.get(editorViewCtx), pos);
 	});
 });
 
@@ -897,21 +545,7 @@ document.addEventListener('add-extra-header', (e) => {
 	};
 	if (!editor) return;
 	editor.action((ctx) => {
-		const view = ctx.get(editorViewCtx);
-		const state = view.state;
-		const { extra_header_row, table_header, paragraph } = state.schema.nodes;
-		const cells: ProseMirrorNode[] = [];
-		for (let i = 0; i < colCount; i++) {
-			cells.push(
-				table_header.create(
-					{ colspan: 1, rowspan: 1, alignment: null },
-					paragraph.create(),
-				),
-			);
-		}
-		const newRow = extra_header_row.create({}, cells);
-		const mappedPos = state.tr.mapping.map(insertPos);
-		view.dispatch(state.tr.insert(mappedPos, newRow));
+		addExtraHeaderRowAt(ctx.get(editorViewCtx), insertPos, colCount);
 	});
 });
 
@@ -919,11 +553,7 @@ document.addEventListener('remove-extra-header', (e) => {
 	const { rowPos } = (e as CustomEvent).detail as { rowPos: number };
 	if (!editor) return;
 	editor.action((ctx) => {
-		const view = ctx.get(editorViewCtx);
-		const state = view.state;
-		const node = state.doc.nodeAt(rowPos);
-		if (!node || node.type.name !== 'extra_header_row') return;
-		view.dispatch(state.tr.delete(rowPos, rowPos + node.nodeSize));
+		removeExtraHeaderRowAt(ctx.get(editorViewCtx), rowPos);
 	});
 });
 
