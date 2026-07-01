@@ -31,6 +31,14 @@ export interface ScrollToHeadingMessage {
 	pos: number;
 }
 
+export interface MoveSectionMessage {
+	type: 'moveSection';
+	/** ProseMirror position of the dragged heading. */
+	sourcePos: number;
+	/** ProseMirror position of the drop-target heading, or null to move to end. */
+	targetPos: number | null;
+}
+
 export interface RequestHeadingsMessage {
 	type: 'requestHeadings';
 }
@@ -91,6 +99,7 @@ export type HostToEditorMessage =
 	| RequestWordCountMessage
 	| SetSyncDebugLogsMessage
 	| ScrollToHeadingMessage
+	| MoveSectionMessage
 	| UpdateMessage
 	| RequestExportHtmlMessage;
 
@@ -139,6 +148,11 @@ export function isHostToEditorMessage(
 			return typeof value.body === 'string';
 		case 'scrollToHeading':
 			return typeof value.pos === 'number';
+		case 'moveSection':
+			return (
+				typeof value.sourcePos === 'number' &&
+				(value.targetPos === null || typeof value.targetPos === 'number')
+			);
 		case 'requestHeadings':
 		case 'requestWordCount':
 			return true;
