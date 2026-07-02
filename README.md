@@ -21,6 +21,7 @@ ext install painomi0587.markdown-live-editor-plus
 - **Extended table syntax** — `>` for colspan, `^` for rowspan, multi-row headers
 - **Cell merge/unmerge** — Merge cells via `>` / `^` syntax; click ⊠ to unmerge
 - **Table auto-formatting** — Tables are aligned automatically when typing `|` (full-width character aware)
+- **Paste CSV/TSV as table** — Paste tab- or comma-separated data (e.g. copied from a spreadsheet) to convert it into a GFM table
 - **Selection toolbar** — Select text to show Bold, Italic, Strikethrough, Code, and Link buttons
 - **Link tooltip** — Hover over links to preview URL with edit/delete actions
 - **In-editor Find** — Search inside the webview editor with match highlights and keyboard navigation
