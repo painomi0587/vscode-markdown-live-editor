@@ -2,6 +2,14 @@
 
 All notable changes to Markdown Live Editor will be documented in this file.
 
+## [1.1.0] - 2026-07-02
+
+### Added
+
+- Image paste & drop — paste an image from the clipboard or drop image files onto the editor to save them next to the document and insert a relative-path link. The save directory is configurable via `markdownLiveEditor.imageSaveDir` (default `images`); clipboard pastes get a timestamped filename while dropped files keep their original name, and colliding names are disambiguated automatically.
+- Paste CSV/TSV as a table — pasting tab- or comma-separated data (e.g. copied from a spreadsheet) converts it into a GFM table. Tab-separated text and consistent multi-row CSV are detected; ordinary prose, ragged CSV, real HTML tables, and pastes inside code blocks or existing tables are left untouched.
+- Outline drag-to-reorder — drag a heading in the Markdown Outline panel to move its whole section before another section (or to the end when dropped on empty space).
+
 ## [1.0.3] - 2026-07-01
 
 ### Changed
