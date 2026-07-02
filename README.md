@@ -21,11 +21,12 @@ ext install painomi0587.markdown-live-editor-plus
 - **Extended table syntax** — `>` for colspan, `^` for rowspan, multi-row headers
 - **Cell merge/unmerge** — Merge cells via `>` / `^` syntax; click ⊠ to unmerge
 - **Table auto-formatting** — Tables are aligned automatically when typing `|` (full-width character aware)
+- **Paste CSV/TSV as table** — Paste tab- or comma-separated data (e.g. copied from a spreadsheet) to convert it into a GFM table
 - **Selection toolbar** — Select text to show Bold, Italic, Strikethrough, Code, and Link buttons
 - **Link tooltip** — Hover over links to preview URL with edit/delete actions
 - **In-editor Find** — Search inside the webview editor with match highlights and keyboard navigation
 - **Heading folding** — Collapse and expand sections by heading in the editor
-- **Outline panel** — Heading hierarchy in the Explorer sidebar with click-to-scroll navigation
+- **Outline panel** — Heading hierarchy in the Explorer sidebar with click-to-scroll navigation and drag-to-reorder sections
 - **Syntax highlighting** — Code blocks with language-aware highlighting via [highlight.js](https://highlightjs.org/)
 - **Mermaid diagrams** — Live preview of `mermaid` code blocks
 - **KaTeX math** — Inline `$...$` and block `$$...$$` math rendering

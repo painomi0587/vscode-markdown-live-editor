@@ -96,6 +96,20 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
 			),
 		);
 
+		disposables.push(
+			vscode.commands.registerCommand(
+				'markdownLiveEditor.moveSection',
+				(sourcePos: number, targetPos: number | null) => {
+					const message: HostToEditorMessage = {
+						type: 'moveSection',
+						sourcePos,
+						targetPos,
+					};
+					provider.activeWebviewPanel?.webview.postMessage(message);
+				},
+			),
+		);
+
 		return vscode.Disposable.from(...disposables);
 	}
 

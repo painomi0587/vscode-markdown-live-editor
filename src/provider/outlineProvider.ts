@@ -26,8 +26,16 @@ class HeadingTreeItem extends vscode.TreeItem {
 }
 
 export class OutlineProvider
-	implements vscode.TreeDataProvider<HeadingTreeItem>
+	implements
+		vscode.TreeDataProvider<HeadingTreeItem>,
+		vscode.TreeDragAndDropController<HeadingTreeItem>
 {
+	private static readonly mimeType =
+		'application/vnd.code.tree.markdownliveeditor.outline';
+
+	readonly dragMimeTypes = [OutlineProvider.mimeType];
+	readonly dropMimeTypes = [OutlineProvider.mimeType];
+
 	private _onDidChangeTreeData = new vscode.EventEmitter<
 		HeadingTreeItem | undefined
 	>();
@@ -54,6 +62,36 @@ export class OutlineProvider
 			return this.roots;
 		}
 		return element.children;
+	}
+
+	handleDrag(
+		source: readonly HeadingTreeItem[],
+		dataTransfer: vscode.DataTransfer,
+	): void {
+		const dragged = source[0];
+		if (!dragged) return;
+		dataTransfer.set(
+			OutlineProvider.mimeType,
+			new vscode.DataTransferItem(dragged.heading.pos),
+		);
+	}
+
+	async handleDrop(
+		target: HeadingTreeItem | undefined,
+		dataTransfer: vscode.DataTransfer,
+	): Promise<void> {
+		const transferItem = dataTransfer.get(OutlineProvider.mimeType);
+		if (!transferItem) return;
+		const sourcePos = transferItem.value;
+		if (typeof sourcePos !== 'number') return;
+		// Dropping a section onto its own heading is a no-op.
+		const targetPos = target ? target.heading.pos : null;
+		if (targetPos === sourcePos) return;
+		await vscode.commands.executeCommand(
+			'markdownLiveEditor.moveSection',
+			sourcePos,
+			targetPos,
+		);
 	}
 
 	/**

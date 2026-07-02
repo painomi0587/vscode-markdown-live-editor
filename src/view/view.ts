@@ -59,8 +59,10 @@ import {
 	remarkMathPlugin,
 } from './katexPlugin';
 import { multiRowHeaderUiPlugin } from './multiRowHeaderUiPlugin';
+import { pasteTablePlugin } from './pasteTablePlugin';
 import { mountSearchPanel } from './searchPanel';
 import { searchPlugin } from './searchPlugin';
+import { computeSectionMove, type SectionChild } from './sectionMove';
 import { configureSlash, slash, slashKeyboardPlugin } from './slashPlugin';
 import { createSyncDebugLogger } from './syncDebugLog';
 import { configureTableBlock, tableBlock } from './tableBlockPlugin';
@@ -410,6 +412,7 @@ async function createEditor(
 		.use(slash)
 		.config(configureSlash)
 		.use(tableMergePlugin)
+		.use(pasteTablePlugin)
 		.use(multiRowHeaderUiPlugin)
 		.use(extraHeaderSyncPlugin)
 		.use(slashKeyboardPlugin);
@@ -535,6 +538,66 @@ function maybeApplyPendingRemoteUpdate(): void {
 	replaceContent(queued);
 }
 
+// Reorder a top-level heading section in response to an outline drag-and-drop.
+// The heavy lifting (section span + guard rails) lives in the pure
+// computeSectionMove helper; here we only translate ProseMirror positions to
+// child indices and build the transaction.
+function applySectionMove(sourcePos: number, targetPos: number | null): void {
+	if (!editor) return;
+	editor.action((ctx) => {
+		const view = ctx.get(editorViewCtx);
+		const { doc } = view.state;
+
+		const $source = doc.resolve(
+			Math.min(Math.max(sourcePos, 0), doc.content.size),
+		);
+		// Only top-level headings (direct children of the doc) can be reordered.
+		if ($source.depth !== 0) return;
+		const sourceNode = $source.nodeAfter;
+		if (!sourceNode || sourceNode.type.name !== 'heading') return;
+		const sourceIndex = $source.index();
+
+		let targetIndex: number | null = null;
+		if (targetPos !== null) {
+			const $target = doc.resolve(
+				Math.min(Math.max(targetPos, 0), doc.content.size),
+			);
+			if ($target.depth !== 0) return;
+			targetIndex = $target.index();
+		}
+
+		const children: SectionChild[] = [];
+		doc.forEach((child) => {
+			children.push({
+				isHeading: child.type.name === 'heading',
+				level: (child.attrs.level as number) ?? 0,
+				size: child.nodeSize,
+			});
+		});
+
+		const move = computeSectionMove(children, sourceIndex, targetIndex);
+		if (!move) return;
+
+		const { startPos, endPos, insertPos } = move;
+		const content = doc.slice(startPos, endPos).content;
+		const size = endPos - startPos;
+
+		let tr = view.state.tr;
+		if (insertPos <= startPos) {
+			// Insert the copy before the source, then remove the (shifted) source.
+			tr = tr.insert(insertPos, content);
+			tr = tr.delete(startPos + size, endPos + size);
+		} else {
+			// Remove the source first, then insert at the shifted target position.
+			tr = tr.delete(startPos, endPos);
+			tr = tr.insert(insertPos - size, content);
+		}
+		if (tr.docChanged) {
+			view.dispatch(tr);
+		}
+	});
+}
+
 // Handle messages from the extension host
 window.addEventListener('message', (event) => {
 	const rawMessage = event.data;
@@ -611,6 +674,10 @@ window.addEventListener('message', (event) => {
 		case 'imageSaveFailed': {
 			if (!pendingImageRequests.delete(message.requestId)) break;
 			showError(`Failed to save image: ${message.error}`);
+			break;
+		}
+		case 'moveSection': {
+			applySectionMove(message.sourcePos, message.targetPos);
 			break;
 		}
 		case 'requestHeadings': {

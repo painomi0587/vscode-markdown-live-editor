@@ -40,6 +40,22 @@ describe('isHostToEditorMessage', () => {
 			true,
 		);
 		assert.equal(
+			isHostToEditorMessage({
+				type: 'moveSection',
+				sourcePos: 5,
+				targetPos: 20,
+			}),
+			true,
+		);
+		assert.equal(
+			isHostToEditorMessage({
+				type: 'moveSection',
+				sourcePos: 5,
+				targetPos: null,
+			}),
+			true,
+		);
+		assert.equal(
 			isHostToEditorMessage({ type: 'setSyncDebugLogs', enabled: true }),
 			true,
 		);
@@ -53,6 +69,18 @@ describe('isHostToEditorMessage', () => {
 		);
 		assert.equal(
 			isHostToEditorMessage({ type: 'setSyncDebugLogs', enabled: 'true' }),
+			false,
+		);
+		assert.equal(
+			isHostToEditorMessage({ type: 'moveSection', sourcePos: '5' }),
+			false,
+		);
+		assert.equal(
+			isHostToEditorMessage({
+				type: 'moveSection',
+				sourcePos: 5,
+				targetPos: '20',
+			}),
 			false,
 		);
 		assert.equal(isHostToEditorMessage({ type: 'unknown' }), false);

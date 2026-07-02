@@ -31,6 +31,14 @@ export interface ScrollToHeadingMessage {
 	pos: number;
 }
 
+export interface MoveSectionMessage {
+	type: 'moveSection';
+	/** ProseMirror position of the dragged heading. */
+	sourcePos: number;
+	/** ProseMirror position of the drop-target heading, or null to move to end. */
+	targetPos: number | null;
+}
+
 export interface RequestHeadingsMessage {
 	type: 'requestHeadings';
 }
@@ -118,6 +126,7 @@ export type HostToEditorMessage =
 	| RequestWordCountMessage
 	| SetSyncDebugLogsMessage
 	| ScrollToHeadingMessage
+	| MoveSectionMessage
 	| UpdateMessage
 	| ImageSavedMessage
 	| ImageSaveFailedMessage
@@ -178,6 +187,11 @@ export function isHostToEditorMessage(
 		case 'imageSaveFailed':
 			return (
 				typeof value.requestId === 'string' && typeof value.error === 'string'
+			);
+		case 'moveSection':
+			return (
+				typeof value.sourcePos === 'number' &&
+				(value.targetPos === null || typeof value.targetPos === 'number')
 			);
 		case 'requestHeadings':
 		case 'requestWordCount':
