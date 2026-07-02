@@ -8,7 +8,7 @@ import {
 	serializerCtx,
 } from '@milkdown/core';
 import { commonmark } from '@milkdown/preset-commonmark';
-import { gfm } from '@milkdown/preset-gfm';
+import { gfm, strikethroughInputRule } from '@milkdown/preset-gfm';
 import type { Node as ProseMirrorNode } from '@milkdown/prose/model';
 import { Plugin, TextSelection } from '@milkdown/prose/state';
 import { $prose } from '@milkdown/utils';
@@ -61,6 +61,11 @@ import { multiRowHeaderUiPlugin } from './multiRowHeaderUiPlugin';
 import { mountSearchPanel } from './searchPanel';
 import { searchPlugin } from './searchPlugin';
 import { configureSlash, slash, slashKeyboardPlugin } from './slashPlugin';
+import {
+	configureStrikethrough,
+	remarkLoneTildePlugin,
+	strikethroughDoubleTildeInputRule,
+} from './strikethroughPlugin';
 import { createSyncDebugLogger } from './syncDebugLog';
 import { configureTableBlock, tableBlock } from './tableBlockPlugin';
 import {
@@ -259,6 +264,10 @@ async function createEditor(
 		})
 		.use(commonmark)
 		.use(gfm)
+		.config(configureStrikethrough)
+		// after gfm: the attacher patches remark-gfm's toMarkdown extension
+		.use(remarkLoneTildePlugin)
+		.use(strikethroughDoubleTildeInputRule)
 		.use(extendedTableCellSchema)
 		.use(extendedTableHeaderSchema)
 		.use(extraHeaderRowSchema)
@@ -298,6 +307,12 @@ async function createEditor(
 		.use(multiRowHeaderUiPlugin)
 		.use(extraHeaderSyncPlugin)
 		.use(slashKeyboardPlugin);
+
+	// Drop preset-gfm's single-tilde input rule; the double-tilde
+	// replacement is registered above (see strikethroughPlugin.ts).
+	// Must happen before create(): the plugin store is only evaluated
+	// there, so removing now means the rule is never activated.
+	await instance.remove(strikethroughInputRule);
 
 	await instance.create();
 

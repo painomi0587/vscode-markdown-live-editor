@@ -35,6 +35,7 @@ describe('cleanupTableEscapes', () => {
 		const actual = cleanupTableEscapes(input);
 		assert.equal(actual, ['| col1 | col2 |', '| --- | --- |', '| > | ^ |', 'paragraph \> \^'].join('\n'));
 	});
+
 });
 
 describe('countText', () => {

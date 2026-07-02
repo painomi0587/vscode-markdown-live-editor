@@ -2,6 +2,12 @@
 
 All notable changes to Markdown Live Editor will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+- Fixed single tildes being rendered as strikethrough — text like `0~2、3~5` (tilde as range notation) in table cells or paragraphs no longer pairs up into `<del>`. Strikethrough now requires double tildes (`~~text~~`) both when parsing files and while typing, matching VS Code's built-in markdown preview. The serializer also stops escaping lone tildes anywhere in the document (only `~` adjacent to another `~` is escaped), so range notation round-trips unchanged instead of being rewritten to `\~` on save.
+
 ## [1.0.3] - 2026-07-01
 
 ### Changed

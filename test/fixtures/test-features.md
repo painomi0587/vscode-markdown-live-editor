@@ -18,6 +18,8 @@ This is **bold**, this is *italic*, this is ***bold italic***.
 
 This is ~~strikethrough~~ text.
 
+Single tildes are plain text: 0~2, 3~5 (range notation, not strikethrough).
+
 This is `inline code` in a sentence.
 
 ---
