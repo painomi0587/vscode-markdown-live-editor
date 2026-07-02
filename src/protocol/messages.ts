@@ -93,6 +93,33 @@ export interface SyncDebugLogMessage {
 	payload: Record<string, unknown>;
 }
 
+export interface SaveImageMessage {
+	type: 'saveImage';
+	/** Correlates the async save reply back to the pending insertion. */
+	requestId: string;
+	/** Base64-encoded image bytes (no data: URI prefix). */
+	data: string;
+	/** Image MIME type, e.g. "image/png". */
+	mimeType: string;
+	/** Original filename for dropped files, or null for clipboard pastes. */
+	name: string | null;
+}
+
+export interface ImageSavedMessage {
+	type: 'imageSaved';
+	requestId: string;
+	/** Relative Markdown src to insert. */
+	src: string;
+	/** Suggested alt text. */
+	alt: string;
+}
+
+export interface ImageSaveFailedMessage {
+	type: 'imageSaveFailed';
+	requestId: string;
+	error: string;
+}
+
 export type HostToEditorMessage =
 	| InitMessage
 	| RequestHeadingsMessage
@@ -101,6 +128,8 @@ export type HostToEditorMessage =
 	| ScrollToHeadingMessage
 	| MoveSectionMessage
 	| UpdateMessage
+	| ImageSavedMessage
+	| ImageSaveFailedMessage
 	| RequestExportHtmlMessage;
 
 export type EditorToHostMessage =
@@ -110,6 +139,7 @@ export type EditorToHostMessage =
 	| WordCountMessage
 	| ExportHtmlMessage
 	| RequestExportMessage
+	| SaveImageMessage
 	| SyncDebugLogMessage;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -148,6 +178,16 @@ export function isHostToEditorMessage(
 			return typeof value.body === 'string';
 		case 'scrollToHeading':
 			return typeof value.pos === 'number';
+		case 'imageSaved':
+			return (
+				typeof value.requestId === 'string' &&
+				typeof value.src === 'string' &&
+				typeof value.alt === 'string'
+			);
+		case 'imageSaveFailed':
+			return (
+				typeof value.requestId === 'string' && typeof value.error === 'string'
+			);
 		case 'moveSection':
 			return (
 				typeof value.sourcePos === 'number' &&
@@ -197,6 +237,13 @@ export function isEditorToHostMessage(
 			return (
 				typeof value.mode === 'string' &&
 				(value.mode === 'clipboard' || value.mode === 'file')
+			);
+		case 'saveImage':
+			return (
+				typeof value.requestId === 'string' &&
+				typeof value.data === 'string' &&
+				typeof value.mimeType === 'string' &&
+				(value.name === null || typeof value.name === 'string')
 			);
 		case 'syncDebugLog':
 			return (

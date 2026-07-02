@@ -11,6 +11,7 @@ import { commonmark } from '@milkdown/preset-commonmark';
 import { gfm } from '@milkdown/preset-gfm';
 import type { Node as ProseMirrorNode } from '@milkdown/prose/model';
 import { Plugin, TextSelection } from '@milkdown/prose/state';
+import type { EditorView } from '@milkdown/prose/view';
 import { $prose } from '@milkdown/utils';
 import {
 	type EditorToHostMessage,
@@ -244,6 +245,119 @@ const wordCountPlugin = $prose((_ctx) => {
 	});
 });
 
+// -------------------------------------------------------
+// Image paste / drop — send image bytes to the extension host, which saves
+// them as asset files and replies with a relative path to insert.
+// -------------------------------------------------------
+
+const pendingImageRequests = new Set<string>();
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+	const bytes = new Uint8Array(buffer);
+	let binary = '';
+	const chunkSize = 0x8000;
+	for (let i = 0; i < bytes.length; i += chunkSize) {
+		const chunk = bytes.subarray(i, i + chunkSize);
+		binary += String.fromCharCode(...chunk);
+	}
+	return btoa(binary);
+}
+
+function imageFilesFromDataTransfer(dataTransfer: DataTransfer | null): File[] {
+	if (!dataTransfer) return [];
+	const files: File[] = [];
+	if (dataTransfer.files && dataTransfer.files.length > 0) {
+		for (const file of Array.from(dataTransfer.files)) {
+			if (file.type.startsWith('image/')) files.push(file);
+		}
+	}
+	if (files.length === 0 && dataTransfer.items) {
+		for (const item of Array.from(dataTransfer.items)) {
+			if (item.kind === 'file' && item.type.startsWith('image/')) {
+				const file = item.getAsFile();
+				if (file) files.push(file);
+			}
+		}
+	}
+	return files;
+}
+
+async function requestImageSave(
+	file: File,
+	useOriginalName: boolean,
+): Promise<void> {
+	try {
+		const buffer = await file.arrayBuffer();
+		const requestId = `img-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+		pendingImageRequests.add(requestId);
+		vscode.postMessage({
+			type: 'saveImage',
+			requestId,
+			data: arrayBufferToBase64(buffer),
+			mimeType: file.type,
+			name: useOriginalName && file.name ? file.name : null,
+		});
+	} catch (err) {
+		showError(`Failed to read pasted image: ${err}`);
+	}
+}
+
+function selectionInCodeBlock(view: EditorView): boolean {
+	const { $from } = view.state.selection;
+	for (let depth = $from.depth; depth > 0; depth -= 1) {
+		if ($from.node(depth).type.name === 'code_block') return true;
+	}
+	return false;
+}
+
+const imagePastePlugin = $prose((_ctx) => {
+	return new Plugin({
+		props: {
+			handlePaste(view, event) {
+				const files = imageFilesFromDataTransfer(event.clipboardData);
+				if (files.length === 0) return false;
+				if (selectionInCodeBlock(view)) return false;
+				event.preventDefault();
+				for (const file of files) void requestImageSave(file, false);
+				return true;
+			},
+			handleDrop(view, event) {
+				const files = imageFilesFromDataTransfer(event.dataTransfer);
+				if (files.length === 0) return false;
+				if (selectionInCodeBlock(view)) return false;
+				event.preventDefault();
+				const coords = view.posAtCoords({
+					left: event.clientX,
+					top: event.clientY,
+				});
+				if (coords) {
+					view.dispatch(
+						view.state.tr.setSelection(
+							TextSelection.near(view.state.doc.resolve(coords.pos)),
+						),
+					);
+				}
+				for (const file of files) void requestImageSave(file, true);
+				return true;
+			},
+		},
+	});
+});
+
+function insertSavedImage(src: string, alt: string): void {
+	if (!editor) return;
+	editor.action((ctx) => {
+		const view = ctx.get(editorViewCtx);
+		const imageType = view.state.schema.nodes.image;
+		if (!imageType) return;
+		const node = imageType.create({ src, alt, title: null });
+		view.dispatch(
+			view.state.tr.replaceSelectionWith(node, false).scrollIntoView(),
+		);
+		view.focus();
+	});
+}
+
 const visualLineNumbersController = createVisualLineNumbersController({
 	isUpdateBlocked: () => isInitializing || isUpdatingFromExtension,
 });
@@ -290,6 +404,7 @@ async function createEditor(
 		.use(frontmatterViewPlugin)
 		.use(mathViewPlugin)
 		.use(imageViewPlugin)
+		.use(imagePastePlugin)
 		.use(selectionToolbar)
 		.config(configureSelectionToolbar)
 		.use(linkTooltipPlugin)
@@ -549,6 +664,16 @@ window.addEventListener('message', (event) => {
 				}
 				view.focus();
 			});
+			break;
+		}
+		case 'imageSaved': {
+			if (!pendingImageRequests.delete(message.requestId)) break;
+			insertSavedImage(message.src, message.alt);
+			break;
+		}
+		case 'imageSaveFailed': {
+			if (!pendingImageRequests.delete(message.requestId)) break;
+			showError(`Failed to save image: ${message.error}`);
 			break;
 		}
 		case 'moveSection': {

@@ -5,8 +5,15 @@ import {
 	type HostToEditorMessage,
 	isEditorToHostMessage,
 	type RequestExportMessage,
+	type SaveImageMessage,
 } from '../protocol/messages';
 import { hashText } from '../shared/hash';
+import {
+	buildImageSrc,
+	disambiguateFilename,
+	generateImageFilename,
+	normalizeSaveDir,
+} from './imageAssets';
 import type { OutlineProvider } from './outlineProvider';
 import {
 	consumeDocumentChange,
@@ -244,6 +251,10 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
 						}
 						break;
 					}
+					case 'saveImage': {
+						void this.handleSaveImage(document, webviewPanel, message);
+						break;
+					}
 					case 'syncDebugLog': {
 						if (!isSyncDebugEnabled()) {
 							break;
@@ -477,6 +488,107 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
 			`Exported styled HTML to ${target.path || target.toString(true)}`,
 		);
 	}
+
+	private async uriExists(uri: vscode.Uri): Promise<boolean> {
+		try {
+			await vscode.workspace.fs.stat(uri);
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
+	private async handleSaveImage(
+		document: vscode.TextDocument,
+		webviewPanel: vscode.WebviewPanel,
+		message: SaveImageMessage,
+	): Promise<void> {
+		const reply = (msg: HostToEditorMessage) => {
+			webviewPanel.webview.postMessage(msg);
+		};
+
+		try {
+			const generated = generateImageFilename({
+				mimeType: message.mimeType,
+				originalName: message.name,
+				now: new Date(),
+				rand: Math.random().toString(36).slice(2, 6),
+			});
+			if (!generated) {
+				reply({
+					type: 'imageSaveFailed',
+					requestId: message.requestId,
+					error: `Unsupported image type: ${message.mimeType || 'unknown'}`,
+				});
+				return;
+			}
+
+			const config = vscode.workspace.getConfiguration('markdownLiveEditor');
+			const dirSegments = normalizeSaveDir(
+				config.get<string>('imageSaveDir', 'images') ?? 'images',
+			);
+
+			const documentDir = vscode.Uri.joinPath(document.uri, '..');
+			const targetDir =
+				dirSegments.length > 0
+					? vscode.Uri.joinPath(documentDir, ...dirSegments)
+					: documentDir;
+			await vscode.workspace.fs.createDirectory(targetDir);
+
+			// Resolve a name that does not overwrite an existing file. The exists
+			// predicate is seeded from a directory listing for a synchronous check.
+			let entries: [string, vscode.FileType][] = [];
+			try {
+				entries = await vscode.workspace.fs.readDirectory(targetDir);
+			} catch {
+				entries = [];
+			}
+			const existing = new Set(entries.map(([name]) => name));
+			const filename = disambiguateFilename(generated.filename, (candidate) =>
+				existing.has(candidate),
+			);
+
+			const fileUri = vscode.Uri.joinPath(targetDir, filename);
+			// Guard against a race where the file appeared after the listing.
+			if (await this.uriExists(fileUri)) {
+				const retried = disambiguateFilename(
+					`${Date.now()}-${filename}`,
+					(candidate) => existing.has(candidate),
+				);
+				await this.writeImage(
+					vscode.Uri.joinPath(targetDir, retried),
+					message.data,
+				);
+				reply({
+					type: 'imageSaved',
+					requestId: message.requestId,
+					src: buildImageSrc(dirSegments, retried),
+					alt: generated.alt,
+				});
+				return;
+			}
+
+			await this.writeImage(fileUri, message.data);
+			reply({
+				type: 'imageSaved',
+				requestId: message.requestId,
+				src: buildImageSrc(dirSegments, filename),
+				alt: generated.alt,
+			});
+		} catch (err) {
+			reply({
+				type: 'imageSaveFailed',
+				requestId: message.requestId,
+				error: err instanceof Error ? err.message : String(err),
+			});
+		}
+	}
+
+	private async writeImage(uri: vscode.Uri, base64: string): Promise<void> {
+		const bytes = Uint8Array.from(Buffer.from(base64, 'base64'));
+		await vscode.workspace.fs.writeFile(uri, bytes);
+	}
+
 	private getHtmlForWebview(webview: vscode.Webview): string {
 		const scriptUri = webview.asWebviewUri(
 			vscode.Uri.joinPath(this.context.extensionUri, 'media', 'view.js'),
