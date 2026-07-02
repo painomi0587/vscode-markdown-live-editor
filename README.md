@@ -25,7 +25,7 @@ ext install painomi0587.markdown-live-editor-plus
 - **Link tooltip** — Hover over links to preview URL with edit/delete actions
 - **In-editor Find** — Search inside the webview editor with match highlights and keyboard navigation
 - **Heading folding** — Collapse and expand sections by heading in the editor
-- **Outline panel** — Heading hierarchy in the Explorer sidebar with click-to-scroll navigation
+- **Outline panel** — Heading hierarchy in the Explorer sidebar with click-to-scroll navigation and drag-to-reorder sections
 - **Syntax highlighting** — Code blocks with language-aware highlighting via [highlight.js](https://highlightjs.org/)
 - **Mermaid diagrams** — Live preview of `mermaid` code blocks
 - **KaTeX math** — Inline `$...$` and block `$$...$$` math rendering

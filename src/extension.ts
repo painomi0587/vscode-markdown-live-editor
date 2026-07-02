@@ -8,6 +8,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 	const treeView = vscode.window.createTreeView('markdownLiveEditor.outline', {
 		treeDataProvider: outlineProvider,
+		dragAndDropController: outlineProvider,
 		showCollapseAll: true,
 	});
 
